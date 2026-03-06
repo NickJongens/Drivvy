@@ -3,15 +3,22 @@ import * as THREE from "three";
 const BODY_GEOMETRY = new THREE.BoxGeometry(1, 1, 1);
 const LIGHT_GEOMETRY = new THREE.BoxGeometry(0.24, 0.08, 0.18);
 const SIGNAL_GEOMETRY = new THREE.BoxGeometry(0.18, 0.12, 0.16);
-const WHEEL_GEOMETRY = new THREE.CylinderGeometry(0.37, 0.37, 0.28, 10);
-const RIM_GEOMETRY = new THREE.CylinderGeometry(0.22, 0.22, 0.31, 10);
-const SHADOW_GEOMETRY = new THREE.CircleGeometry(1.9, 22);
+const WHEEL_GEOMETRY = new THREE.CylinderGeometry(0.37, 0.37, 0.28, 6);
+const RIM_GEOMETRY = new THREE.CylinderGeometry(0.22, 0.22, 0.31, 6);
+const SHADOW_GEOMETRY = new THREE.CircleGeometry(1.9, 12);
 const FLAME_GEOMETRY = new THREE.ConeGeometry(0.12, 0.54, 6);
+const VEHICLE_FACTORY_QUALITY = {
+  dynamicLights: true,
+};
 
 WHEEL_GEOMETRY.rotateZ(Math.PI * 0.5);
 RIM_GEOMETRY.rotateZ(Math.PI * 0.5);
 SHADOW_GEOMETRY.rotateX(-Math.PI * 0.5);
 FLAME_GEOMETRY.rotateX(Math.PI * 0.5);
+
+export function setVehicleFactoryQuality({ dynamicLights = VEHICLE_FACTORY_QUALITY.dynamicLights } = {}) {
+  VEHICLE_FACTORY_QUALITY.dynamicLights = Boolean(dynamicLights);
+}
 
 function createMaterials({ bodyColor, accentColor, cabinColor = 0x9dc0d8 }) {
   return {
@@ -162,7 +169,7 @@ function attachNightLights(
     brakeLevel: 0,
   };
 
-  if (beam) {
+  if (beam && VEHICLE_FACTORY_QUALITY.dynamicLights) {
     for (const [x, y, z] of headlightPositions) {
       const headlightBeam = new THREE.PointLight(0xffefc4, 0, range, 2);
       headlightBeam.position.set(x, y, z + 0.55);
@@ -181,11 +188,13 @@ function attachNightLights(
     }
   }
 
-  for (const [x, y, z] of tailLightPositions) {
-    const tailGlow = new THREE.PointLight(0xff4b34, 0, rearRange, 2);
-    tailGlow.position.set(x, y, z - 0.18);
-    group.add(tailGlow);
-    tailLightGlows.push(tailGlow);
+  if (VEHICLE_FACTORY_QUALITY.dynamicLights) {
+    for (const [x, y, z] of tailLightPositions) {
+      const tailGlow = new THREE.PointLight(0xff4b34, 0, rearRange, 2);
+      tailGlow.position.set(x, y, z - 0.18);
+      group.add(tailGlow);
+      tailLightGlows.push(tailGlow);
+    }
   }
 
   const applyLightingState = () => {
@@ -489,13 +498,17 @@ function buildPoliceCar() {
   blueLight.position.set(0.26, 2.04, -0.06);
   group.add(blueLight);
 
-  const redGlow = new THREE.PointLight(0xff4458, 0, 10, 2);
-  redGlow.position.set(-0.28, 2.18, -0.06);
-  group.add(redGlow);
+  let redGlow = null;
+  let blueGlow = null;
+  if (VEHICLE_FACTORY_QUALITY.dynamicLights) {
+    redGlow = new THREE.PointLight(0xff4458, 0, 10, 2);
+    redGlow.position.set(-0.28, 2.18, -0.06);
+    group.add(redGlow);
 
-  const blueGlow = new THREE.PointLight(0x3f8bff, 0, 10, 2);
-  blueGlow.position.set(0.28, 2.18, -0.06);
-  group.add(blueGlow);
+    blueGlow = new THREE.PointLight(0x3f8bff, 0, 10, 2);
+    blueGlow.position.set(0.28, 2.18, -0.06);
+    group.add(blueGlow);
+  }
 
   group.userData.emergencyLights = {
     red: [redLight],

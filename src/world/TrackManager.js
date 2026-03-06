@@ -5,11 +5,68 @@ export const ROAD_WIDTH = LANE_WIDTH * 3 + 2.4;
 
 const SAMPLE_STEP = 4;
 const POINTS_PER_CHUNK = 34;
-const FORWARD_BUFFER = 760;
-const BACKWARD_BUFFER = 240;
 const TERRAIN_HALF_WIDTH = 126;
 const DASH_OFFSETS = [-LANE_WIDTH * 0.5, LANE_WIDTH * 0.5];
 const SCENERY_CLEARANCE = ROAD_WIDTH * 0.7 + 7;
+const TRACK_QUALITY_PRESETS = {
+  low: {
+    forwardBuffer: 360,
+    backwardBuffer: 120,
+    backdropPointStep: 18,
+    roadsidePointStep: 8,
+    laneMarkerPointStep: 4,
+    railPointStep: 4,
+    overheadSigns: false,
+    cityScenery: false,
+    countryScenery: true,
+    countryAnimals: false,
+    backdropSecondary: false,
+    distantCityTowerMin: 2,
+    distantCityTowerRange: 2,
+    treeClusterMin: 1,
+    treeClusterRange: 2,
+    cityBlockBuildings: 1,
+    cityBlockParkingCars: 0,
+  },
+  medium: {
+    forwardBuffer: 520,
+    backwardBuffer: 180,
+    backdropPointStep: 14,
+    roadsidePointStep: 5,
+    laneMarkerPointStep: 3,
+    railPointStep: 3,
+    overheadSigns: true,
+    cityScenery: true,
+    countryScenery: true,
+    countryAnimals: false,
+    backdropSecondary: false,
+    distantCityTowerMin: 3,
+    distantCityTowerRange: 3,
+    treeClusterMin: 2,
+    treeClusterRange: 3,
+    cityBlockBuildings: 2,
+    cityBlockParkingCars: 1,
+  },
+  high: {
+    forwardBuffer: 760,
+    backwardBuffer: 240,
+    backdropPointStep: 10,
+    roadsidePointStep: 3,
+    laneMarkerPointStep: 2,
+    railPointStep: 2,
+    overheadSigns: true,
+    cityScenery: true,
+    countryScenery: true,
+    countryAnimals: true,
+    backdropSecondary: true,
+    distantCityTowerMin: 5,
+    distantCityTowerRange: 4,
+    treeClusterMin: 3,
+    treeClusterRange: 4,
+    cityBlockBuildings: 4,
+    cityBlockParkingCars: 4,
+  },
+};
 
 const BOX_GEOMETRY = new THREE.BoxGeometry(1, 1, 1);
 const CYLINDER_GEOMETRY = new THREE.CylinderGeometry(0.5, 0.5, 1, 8);
@@ -34,8 +91,16 @@ const NZ_SIGN_DESTINATIONS = [
   ["Whangarei", "Auckland"],
 ];
 
+function normalizeTrackQualityPreset(value) {
+  if (Object.prototype.hasOwnProperty.call(TRACK_QUALITY_PRESETS, value)) {
+    return value;
+  }
+
+  return "high";
+}
+
 export class TrackManager {
-  constructor(scene) {
+  constructor(scene, { qualityPreset = "high" } = {}) {
     this.scene = scene;
     this.root = new THREE.Group();
     this.scene.add(this.root);
@@ -100,9 +165,16 @@ export class TrackManager {
     this.iceMarkersVisible = false;
     this.seed = 1;
     this.randomState = 1;
+    this.qualityPreset = normalizeTrackQualityPreset(qualityPreset);
+    this.quality = TRACK_QUALITY_PRESETS[this.qualityPreset];
 
     this.setSeed((Date.now() ^ 0xa341316c) >>> 0);
     this.reset();
+  }
+
+  setQualityPreset(preset) {
+    this.qualityPreset = normalizeTrackQualityPreset(preset);
+    this.quality = TRACK_QUALITY_PRESETS[this.qualityPreset];
   }
 
   setSeed(seed) {
@@ -179,11 +251,11 @@ export class TrackManager {
       return;
     }
 
-    while (road.nextS < playerS + FORWARD_BUFFER) {
+    while (road.nextS < playerS + this.quality.forwardBuffer) {
       this.addChunk(road);
     }
 
-    while (road.chunks.length && road.chunks[0].endS < playerS - BACKWARD_BUFFER) {
+    while (road.chunks.length && road.chunks[0].endS < playerS - this.quality.backwardBuffer) {
       const chunk = road.chunks.shift();
       this.root.remove(chunk.group);
       this.disposeChunk(chunk.group);
@@ -486,7 +558,7 @@ export class TrackManager {
   createLaneMarkers(points) {
     const group = new THREE.Group();
 
-    for (let index = 1; index < points.length; index += 2) {
+    for (let index = 1; index < points.length; index += this.quality.laneMarkerPointStep) {
       const pointA = points[index - 1];
       const pointB = points[index];
       const center = pointA.center.clone().lerp(pointB.center, 0.5);
@@ -510,7 +582,7 @@ export class TrackManager {
   createBackdrop(points) {
     const group = new THREE.Group();
 
-    for (let index = 4; index < points.length - 4; index += 10) {
+    for (let index = 4; index < points.length - 4; index += this.quality.backdropPointStep) {
       const point = points[index];
       const region = this.getRegionState(point.s);
 
@@ -530,10 +602,10 @@ export class TrackManager {
           continue;
         }
 
-        if (region.urbanity > 0.45) {
+        if (region.urbanity > 0.45 && this.quality.cityScenery) {
           group.add(this.createDistantCityCluster(anchor, point, side));
 
-          if (roll > 0.38) {
+          if (this.quality.backdropSecondary && roll > 0.38) {
             const secondaryAnchor = point.center
               .clone()
               .addScaledVector(point.right, side * (offset + 16 + this.random() * 18));
@@ -557,7 +629,7 @@ export class TrackManager {
   createRoadside(points) {
     const group = new THREE.Group();
 
-    for (let index = 3; index < points.length - 3; index += 3) {
+    for (let index = 3; index < points.length - 3; index += this.quality.roadsidePointStep) {
       const point = points[index];
       const region = this.getRegionState(point.s);
 
@@ -576,9 +648,11 @@ export class TrackManager {
         }
 
         if (region.urbanity < 0.35) {
-          if (roll < 0.26) {
+          if (!this.quality.countryScenery) {
+            group.add(this.createRoadProp(anchor, point, side));
+          } else if (roll < 0.18) {
             group.add(this.createCountryProperty(anchor, point, side));
-          } else if (roll < 0.42) {
+          } else if (roll < 0.3 && this.quality.countryAnimals) {
             group.add(this.createAnimalGroup(anchor));
           } else if (roll < 0.76) {
             group.add(this.createTreeCluster(anchor));
@@ -587,13 +661,21 @@ export class TrackManager {
           } else {
             group.add(this.createRoadProp(anchor, point, side));
           }
-        } else if (roll < 0.12) {
+        } else if (!this.quality.cityScenery) {
+          if (roll < 0.6) {
+            group.add(this.createTree(anchor));
+          } else if (roll < 0.88) {
+            group.add(this.createRoadProp(anchor, point, side));
+          } else {
+            group.add(this.createTreeCluster(anchor));
+          }
+        } else if (roll < 0.1) {
           group.add(this.createPark(anchor, point, side));
-        } else if (roll < 0.2) {
+        } else if (roll < 0.16) {
           group.add(this.createMonument(anchor, point, side));
-        } else if (roll < 0.46) {
+        } else if (roll < 0.34) {
           group.add(this.createCityBlock(anchor, point, side));
-        } else if (roll < 0.88) {
+        } else if (roll < 0.82) {
           group.add(this.createBuilding(anchor, point, side));
         } else if (roll < 0.95) {
           group.add(this.createTree(anchor));
@@ -746,7 +828,9 @@ export class TrackManager {
     shed.position.set(4.2, shed.scale.y * 0.5, 2.8);
     group.add(shed);
 
-    group.add(this.createAnimalGroup(new THREE.Vector3(2.2, 0, -1.6)));
+    if (this.quality.countryAnimals) {
+      group.add(this.createAnimalGroup(new THREE.Vector3(2.2, 0, -1.6)));
+    }
     return group;
   }
 
@@ -1021,7 +1105,7 @@ export class TrackManager {
       group.add(parkingStripe);
     }
 
-    for (let index = 0; index < 4; index += 1) {
+    for (let index = 0; index < this.quality.cityBlockBuildings; index += 1) {
       const width = 8 + this.random() * 9;
       const depth = 7 + this.random() * 8;
       const height = 20 + this.random() * 28;
@@ -1048,7 +1132,7 @@ export class TrackManager {
       group.add(roofUnit);
     }
 
-    for (let index = 0; index < 4; index += 1) {
+    for (let index = 0; index < this.quality.cityBlockParkingCars; index += 1) {
       const parkedCar = this.createParkingCar();
       parkedCar.position.set(
         -lotWidth * 0.34 + index * (lotWidth * 0.22),
@@ -1059,10 +1143,12 @@ export class TrackManager {
       group.add(parkedCar);
     }
 
-    for (const xOffset of [-lotWidth * 0.42, lotWidth * 0.42]) {
-      const lamp = this.createRoadProp(new THREE.Vector3(xOffset, 0, -lotDepth * 0.16), point, side);
-      lamp.scale.setScalar(0.72);
-      group.add(lamp);
+    if (this.quality.cityScenery) {
+      for (const xOffset of [-lotWidth * 0.42, lotWidth * 0.42]) {
+        const lamp = this.createRoadProp(new THREE.Vector3(xOffset, 0, -lotDepth * 0.16), point, side);
+        lamp.scale.setScalar(0.72);
+        group.add(lamp);
+      }
     }
 
     return group;
@@ -1078,7 +1164,7 @@ export class TrackManager {
     podium.position.y = 0.55;
     group.add(podium);
 
-    const towerCount = 5 + this.randomIndex(4);
+    const towerCount = this.quality.distantCityTowerMin + this.randomIndex(this.quality.distantCityTowerRange);
     for (let index = 0; index < towerCount; index += 1) {
       const width = 6 + this.random() * 8;
       const depth = 6 + this.random() * 6;
@@ -1113,7 +1199,7 @@ export class TrackManager {
     shrubBase.position.y = 0.08;
     group.add(shrubBase);
 
-    const treeCount = 3 + this.randomIndex(4);
+    const treeCount = this.quality.treeClusterMin + this.randomIndex(this.quality.treeClusterRange);
     for (let index = 0; index < treeCount; index += 1) {
       const tree = this.createTree(
         new THREE.Vector3(
@@ -1148,6 +1234,10 @@ export class TrackManager {
   }
 
   shouldPlaceOverheadSign(points) {
+    if (!this.quality.overheadSigns) {
+      return false;
+    }
+
     const marker = Math.floor(points[0].s / 320);
     return points[0].s > 260 && marker % 5 === 2;
   }
@@ -1302,7 +1392,7 @@ export class TrackManager {
   createRoadRails(points) {
     const group = new THREE.Group();
 
-    for (let index = 1; index < points.length; index += 2) {
+    for (let index = 1; index < points.length; index += this.quality.railPointStep) {
       const pointA = points[index - 1];
       const pointB = points[index];
       const center = pointA.center.clone().lerp(pointB.center, 0.5);

@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { createPlayerCar, createRivalCar } from "./entities/VehicleFactory.js";
+import { createPlayerCar, createRivalCar, setVehicleFactoryQuality } from "./entities/VehicleFactory.js";
 import { TrafficSystem } from "./entities/TrafficSystem.js";
 import { InputController } from "./systems/InputController.js";
 import { CollectibleSystem } from "./systems/CollectibleSystem.js";
@@ -28,21 +28,25 @@ const MULTIPLAYER_SEND_INTERVAL = 0.1;
 const GRAPHICS_PRESETS = {
   low: {
     label: "Low",
-    maxPixelRatio: 1.1,
-    renderScale: 0.85,
-    cameraFar: 1200,
+    maxPixelRatio: 1,
+    renderScale: 0.72,
+    cameraFar: 900,
     rearMirror: false,
-    sceneryFlocks: 2,
-    particleBudget: 220,
+    sceneryFlocks: 1,
+    particleBudget: 120,
+    dynamicVehicleLights: false,
+    trackQuality: "low",
   },
   medium: {
     label: "Balanced",
     maxPixelRatio: 1.35,
-    renderScale: 1,
-    cameraFar: 1500,
+    renderScale: 0.9,
+    cameraFar: 1200,
     rearMirror: true,
-    sceneryFlocks: 3,
-    particleBudget: 420,
+    sceneryFlocks: 2,
+    particleBudget: 260,
+    dynamicVehicleLights: false,
+    trackQuality: "medium",
   },
   high: {
     label: "High",
@@ -52,6 +56,8 @@ const GRAPHICS_PRESETS = {
     rearMirror: true,
     sceneryFlocks: 4,
     particleBudget: 700,
+    dynamicVehicleLights: true,
+    trackQuality: "high",
   },
 };
 const MULTIPLAYER_CLEAR_WEATHER = {
@@ -105,7 +111,7 @@ function normalizeGraphicsPreset(value) {
     return value;
   }
 
-  return "low";
+  return "medium";
 }
 
 export class Game {
@@ -118,7 +124,7 @@ export class Game {
     this.telemetryService = new TelemetryService();
     this.trackingConsentService = new TrackingConsentService();
     this.multiplayerClient = new MultiplayerClient();
-    this.graphicsPreset = normalizeGraphicsPreset(readStoredValue(GRAPHICS_PRESET_STORAGE_KEY, "low"));
+    this.graphicsPreset = normalizeGraphicsPreset(readStoredValue(GRAPHICS_PRESET_STORAGE_KEY, "medium"));
     this.graphics = GRAPHICS_PRESETS[this.graphicsPreset];
 
     this.renderer = new THREE.WebGLRenderer({
@@ -146,7 +152,8 @@ export class Game {
     this.skyAccent = this.createSkyAccent();
     this.scene.add(this.skyAccent.group);
 
-    this.track = new TrackManager(this.scene);
+    setVehicleFactoryQuality({ dynamicLights: this.graphics.dynamicVehicleLights });
+    this.track = new TrackManager(this.scene, { qualityPreset: this.graphics.trackQuality });
     this.weatherSystem = new WeatherSystem(this.scene);
     this.trafficSystem = new TrafficSystem(this.scene, this.track);
     this.scenerySystem = new ScenerySystem(this.scene, this.track);
@@ -1552,6 +1559,8 @@ export class Game {
     this.graphicsPreset = nextPreset;
     this.graphics = GRAPHICS_PRESETS[nextPreset];
     this.renderer.setPixelRatio(this.getRenderPixelRatio());
+    setVehicleFactoryQuality({ dynamicLights: this.graphics.dynamicVehicleLights });
+    this.track.setQualityPreset(this.graphics.trackQuality);
     this.camera.far = this.graphics.cameraFar;
     this.camera.updateProjectionMatrix();
     this.rearCamera.far = this.graphics.cameraFar;
@@ -1568,7 +1577,11 @@ export class Game {
     }
 
     if (!silent) {
-      this.hud.setMenuStatus(`${this.graphics.label} graphics enabled.`);
+      this.hud.setMenuStatus(
+        this.state === "running"
+          ? `${this.graphics.label} graphics enabled. City density changes fully apply on the next run.`
+          : `${this.graphics.label} graphics enabled.`
+      );
     }
   }
 
@@ -1582,14 +1595,14 @@ export class Game {
 
   getGraphicsPresetStatus() {
     if (this.graphicsPreset === "high") {
-      return "High pushes sharper rendering, denser particles, more scenery, and the live rear-view mirror.";
+      return "High restores the full city density, longer draw distance, dynamic vehicle lights, and the live rear-view mirror.";
     }
 
     if (this.graphicsPreset === "medium") {
-      return "Balanced restores some clarity and effects while staying easier to run than High.";
+      return "Balanced keeps city detail trimmed and draw distance lower than High, but restores some clarity and effects.";
     }
 
-    return "Low is the default for i5 / 8 GB / Intel integrated graphics. It lowers render resolution, weather particles, scenery, and disables the live rear-view mirror.";
+    return "Low is the default for i5 / 8 GB / Intel integrated graphics. It cuts draw distance, strips dense city scenery, lowers render resolution, and disables dynamic vehicle lights and the live rear-view mirror.";
   }
 
   pickNearestLaneTarget(candidateOffset, laneTargets, bounds) {

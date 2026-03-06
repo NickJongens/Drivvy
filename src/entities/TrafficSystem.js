@@ -206,8 +206,12 @@ export class TrafficSystem {
     if (!vehicle.lightsActive) {
       emergencyLights.redMaterial.emissiveIntensity = 0.16;
       emergencyLights.blueMaterial.emissiveIntensity = 0.16;
-      emergencyLights.redGlow.intensity = 0;
-      emergencyLights.blueGlow.intensity = 0;
+      if (emergencyLights.redGlow) {
+        emergencyLights.redGlow.intensity = 0;
+      }
+      if (emergencyLights.blueGlow) {
+        emergencyLights.blueGlow.intensity = 0;
+      }
       return;
     }
 
@@ -215,8 +219,12 @@ export class TrafficSystem {
     const redOn = Math.floor(vehicle.flashTime) % 2 === 0;
     emergencyLights.redMaterial.emissiveIntensity = redOn ? 1.65 : 0.18;
     emergencyLights.blueMaterial.emissiveIntensity = redOn ? 0.18 : 1.65;
-    emergencyLights.redGlow.intensity = redOn ? 1.9 : 0.08;
-    emergencyLights.blueGlow.intensity = redOn ? 0.08 : 1.9;
+    if (emergencyLights.redGlow) {
+      emergencyLights.redGlow.intensity = redOn ? 1.9 : 0.08;
+    }
+    if (emergencyLights.blueGlow) {
+      emergencyLights.blueGlow.intensity = redOn ? 0.08 : 1.9;
+    }
   }
 
   shouldDespawnVehicle(vehicle, player) {
