@@ -34,6 +34,7 @@ export class ScenerySystem {
     this.track = track;
     this.time = 0;
     this.flocks = [];
+    this.activeFlockCount = 4;
     this.birdMaterial = new THREE.MeshStandardMaterial({ color: 0x283044, flatShading: true });
 
     for (let index = 0; index < 4; index += 1) {
@@ -43,10 +44,27 @@ export class ScenerySystem {
     }
   }
 
+  setQuality({ flockCount = this.flocks.length } = {}) {
+    this.activeFlockCount = THREE.MathUtils.clamp(
+      Math.floor(flockCount),
+      0,
+      this.flocks.length
+    );
+
+    this.flocks.forEach((flock, index) => {
+      flock.group.visible = index < this.activeFlockCount;
+    });
+  }
+
   reset(playerS = 0, routeRef = null) {
     this.time = 0;
     const routeId = this.getRouteId(routeRef);
     this.flocks.forEach((flock, index) => {
+      flock.group.visible = index < this.activeFlockCount;
+      if (index >= this.activeFlockCount) {
+        return;
+      }
+
       this.respawnFlock(flock, playerS + 140 + index * 70, routeId);
     });
   }
@@ -55,7 +73,8 @@ export class ScenerySystem {
     this.time += delta;
     const routeId = this.getRouteId(routeRef);
 
-    for (const flock of this.flocks) {
+    for (let flockIndex = 0; flockIndex < this.activeFlockCount; flockIndex += 1) {
+      const flock = this.flocks[flockIndex];
       if (flock.routeId !== routeId || flock.s < playerS - 90 || flock.s > playerS + 560) {
         this.respawnFlock(flock, playerS + 220 + Math.random() * 220, routeId);
       }

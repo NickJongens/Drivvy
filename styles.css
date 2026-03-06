@@ -34,7 +34,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -402,7 +403,8 @@ input {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.menu-field input {
+.menu-field input,
+.menu-field select {
   width: 100%;
   border: 1px solid rgba(255, 236, 207, 0.16);
   border-radius: 0.9rem;
@@ -414,9 +416,11 @@ input {
     border-color 140ms ease,
     background 140ms ease,
     box-shadow 140ms ease;
+  appearance: none;
 }
 
-.menu-field input:focus {
+.menu-field input:focus,
+.menu-field select:focus {
   border-color: rgba(255, 209, 102, 0.54);
   background: rgba(255, 255, 255, 0.1);
   box-shadow: 0 0 0 3px rgba(255, 209, 102, 0.12);

@@ -166,6 +166,19 @@
               <input id="player-name-input" type="text" maxlength="18" placeholder="Guest" autocomplete="off" />
             </label>
 
+            <label class="menu-field" for="graphics-preset-select">
+              <span class="hud-label">Graphics Preset</span>
+              <select id="graphics-preset-select">
+                <option value="low">Low</option>
+                <option value="medium">Balanced</option>
+                <option value="high">High</option>
+              </select>
+            </label>
+
+            <p id="graphics-preset-status" class="menu-copy menu-copy--compact">
+              Low is the default for integrated graphics systems.
+            </p>
+
             <div class="menu-field menu-field--stack">
               <span class="hud-label">Tracking</span>
               <p id="tracking-status" class="menu-copy menu-copy--compact">

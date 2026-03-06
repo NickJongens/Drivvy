@@ -42,6 +42,8 @@ export class Hud {
     leftIndicator,
     rightIndicator,
     menuTrigger,
+    graphicsPresetSelect,
+    graphicsPresetStatus,
     trackingConsent,
     trackingStatus,
     trackingAcceptButton,
@@ -89,6 +91,8 @@ export class Hud {
     this.leftIndicator = leftIndicator;
     this.rightIndicator = rightIndicator;
     this.menuTrigger = menuTrigger;
+    this.graphicsPresetSelect = graphicsPresetSelect;
+    this.graphicsPresetStatus = graphicsPresetStatus;
     this.trackingConsent = trackingConsent;
     this.trackingStatus = trackingStatus;
     this.trackingAcceptButton = trackingAcceptButton;
@@ -102,12 +106,14 @@ export class Hud {
     this.handleSecretTrigger = this.handleSecretTrigger.bind(this);
     this.handleAiToggle = this.handleAiToggle.bind(this);
     this.handleModeButton = this.handleModeButton.bind(this);
+    this.handleGraphicsPresetChange = this.handleGraphicsPresetChange.bind(this);
 
     this.secretTrigger?.addEventListener("click", this.handleSecretTrigger);
     this.aiToggleButton?.addEventListener("click", this.handleAiToggle);
     this.menuSoloTab?.addEventListener("click", this.handleModeButton);
     this.menuMultiplayerTab?.addEventListener("click", this.handleModeButton);
     this.menuOptionsTab?.addEventListener("click", this.handleModeButton);
+    this.graphicsPresetSelect?.addEventListener("change", this.handleGraphicsPresetChange);
     this.trackingAcceptButton?.addEventListener("click", () => this.onTrackingConsent?.("accepted"));
     this.trackingDeclineButton?.addEventListener("click", () => this.onTrackingConsent?.("declined"));
     this.clearLobbyState();
@@ -211,6 +217,18 @@ export class Hud {
 
     this.aiToggleButton.dataset.enabled = enabled ? "true" : "false";
     this.aiToggleButton.textContent = enabled ? "Drive Assist: On" : "Drive Assist: Off";
+  }
+
+  setGraphicsPreset(preset) {
+    if (this.graphicsPresetSelect) {
+      this.graphicsPresetSelect.value = preset;
+    }
+  }
+
+  setGraphicsPresetStatus(message) {
+    if (this.graphicsPresetStatus) {
+      this.graphicsPresetStatus.textContent = message;
+    }
   }
 
   unlockSecretMenu() {
@@ -456,6 +474,10 @@ export class Hud {
     this.onTrackingConsent = handler;
   }
 
+  setGraphicsPresetHandler(handler) {
+    this.onGraphicsPresetChange = handler;
+  }
+
   handleSecretTrigger() {
     if (this.secretUnlocked) {
       return;
@@ -482,6 +504,13 @@ export class Hud {
     this.setMenuMode(mode);
     if (typeof this.onMenuModeChange === "function") {
       this.onMenuModeChange(mode);
+    }
+  }
+
+  handleGraphicsPresetChange(event) {
+    const preset = event.currentTarget?.value || "low";
+    if (typeof this.onGraphicsPresetChange === "function") {
+      this.onGraphicsPresetChange(preset);
     }
   }
 }

@@ -47,6 +47,8 @@ const game = new Game({
     leftIndicator: document.getElementById("turn-indicator-left"),
     rightIndicator: document.getElementById("turn-indicator-right"),
     menuTrigger: document.getElementById("menu-trigger"),
+    graphicsPresetSelect: document.getElementById("graphics-preset-select"),
+    graphicsPresetStatus: document.getElementById("graphics-preset-status"),
     trackingConsent: document.getElementById("tracking-consent"),
     trackingStatus: document.getElementById("tracking-status"),
     trackingAcceptButton: document.getElementById("tracking-accept-button"),

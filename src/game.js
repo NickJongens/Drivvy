@@ -20,10 +20,40 @@ const LANE_OCCUPANCY_THRESHOLD = LANE_WIDTH * 0.58;
 const AUTOPILOT_STORAGE_KEY = "drivvy.aiAssist";
 const PLAYER_NAME_STORAGE_KEY = "drivvy.playerName";
 const SECRET_STORAGE_KEY = "drivvy.secretMenu";
+const GRAPHICS_PRESET_STORAGE_KEY = "drivvy.graphicsPreset";
 const LEGACY_AUTOPILOT_STORAGE_KEY = "polySprint.autopilot";
 const LEGACY_PLAYER_NAME_STORAGE_KEY = "polySprint.playerName";
 const LEGACY_SECRET_STORAGE_KEY = "polySprint.secretMenu";
 const MULTIPLAYER_SEND_INTERVAL = 0.1;
+const GRAPHICS_PRESETS = {
+  low: {
+    label: "Low",
+    maxPixelRatio: 1.1,
+    renderScale: 0.85,
+    cameraFar: 1200,
+    rearMirror: false,
+    sceneryFlocks: 2,
+    particleBudget: 220,
+  },
+  medium: {
+    label: "Balanced",
+    maxPixelRatio: 1.35,
+    renderScale: 1,
+    cameraFar: 1500,
+    rearMirror: true,
+    sceneryFlocks: 3,
+    particleBudget: 420,
+  },
+  high: {
+    label: "High",
+    maxPixelRatio: 1.75,
+    renderScale: 1,
+    cameraFar: 1800,
+    rearMirror: true,
+    sceneryFlocks: 4,
+    particleBudget: 700,
+  },
+};
 const MULTIPLAYER_CLEAR_WEATHER = {
   id: "clear",
   label: "Clear",
@@ -70,6 +100,14 @@ function writeStoredValue(key, value) {
   }
 }
 
+function normalizeGraphicsPreset(value) {
+  if (Object.prototype.hasOwnProperty.call(GRAPHICS_PRESETS, value)) {
+    return value;
+  }
+
+  return "low";
+}
+
 export class Game {
   constructor({ mount, hudElements, rearMirrorFrame = null, cockpitFrame = null }) {
     this.mount = mount;
@@ -80,9 +118,13 @@ export class Game {
     this.telemetryService = new TelemetryService();
     this.trackingConsentService = new TrackingConsentService();
     this.multiplayerClient = new MultiplayerClient();
+    this.graphicsPreset = normalizeGraphicsPreset(readStoredValue(GRAPHICS_PRESET_STORAGE_KEY, "low"));
+    this.graphics = GRAPHICS_PRESETS[this.graphicsPreset];
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+    this.renderer = new THREE.WebGLRenderer({
+      antialias: false,
+      powerPreference: "high-performance",
+    });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.12;
@@ -201,6 +243,7 @@ export class Game {
     this.hud.setMenuOpenHandler(() => this.toggleMenu());
     this.hud.setMenuModeHandler((mode) => this.setMenuMode(mode));
     this.hud.setAiToggleHandler((nextValue) => this.setAiEnabled(nextValue));
+    this.hud.setGraphicsPresetHandler((preset) => this.setGraphicsPreset(preset));
     this.hud.setTrackingConsentHandler((choice) => this.setTrackingConsent(choice));
     this.hud.setSecretUnlockHandler(() => {
       this.secretMenuUnlocked = true;
@@ -249,8 +292,10 @@ export class Game {
     }
 
     this.hud.setAiEnabled(this.aiEnabled);
+    this.hud.setGraphicsPreset(this.graphicsPreset);
     this.hud.setPlayerName(readStoredValue(PLAYER_NAME_STORAGE_KEY, "", LEGACY_PLAYER_NAME_STORAGE_KEY));
     this.hud.setMultiplayerStatus(this.multiplayer.status);
+    this.applyGraphicsPreset(this.graphicsPreset, { persist: false, silent: true });
     this.syncTrackingConsentUi();
     this.handleResize();
     this.resetRun({ seed: this.currentTrackSeed });
@@ -531,8 +576,10 @@ export class Game {
   handleResize() {
     const width = window.innerWidth;
     const height = window.innerHeight;
-    this.camera.aspect = width / height;
+    this.camera.aspect = width / Math.max(height, 1);
     this.camera.updateProjectionMatrix();
+    this.rearCamera.aspect = width / Math.max(height, 1);
+    this.rearCamera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
   }
 
@@ -966,9 +1013,9 @@ export class Game {
   }
 
   updateRearMirrorState() {
-    const visible = this.state === "running" && this.viewMode === "fpv" && !this.hud.isMenuVisible();
-    this.rearMirrorFrame?.classList.toggle("is-active", visible);
-    this.cockpitFrame?.classList.toggle("is-active", visible);
+    const cockpitVisible = this.state === "running" && this.viewMode === "fpv" && !this.hud.isMenuVisible();
+    this.rearMirrorFrame?.classList.toggle("is-active", cockpitVisible && this.graphics.rearMirror);
+    this.cockpitFrame?.classList.toggle("is-active", cockpitVisible);
   }
 
   renderFrame() {
@@ -987,7 +1034,13 @@ export class Game {
   }
 
   shouldRenderRearMirror() {
-    return Boolean(this.rearMirrorFrame && this.state === "running" && this.viewMode === "fpv" && !this.hud.isMenuVisible());
+    return Boolean(
+      this.graphics.rearMirror &&
+      this.rearMirrorFrame &&
+      this.state === "running" &&
+      this.viewMode === "fpv" &&
+      !this.hud.isMenuVisible()
+    );
   }
 
   renderRearMirror() {
@@ -1488,6 +1541,55 @@ export class Game {
     this.aiEnabled = nextValue;
     this.hud.setAiEnabled(nextValue);
     writeStoredValue(AUTOPILOT_STORAGE_KEY, nextValue ? "1" : "0");
+  }
+
+  setGraphicsPreset(preset) {
+    this.applyGraphicsPreset(preset);
+  }
+
+  applyGraphicsPreset(preset, { persist = true, silent = false } = {}) {
+    const nextPreset = normalizeGraphicsPreset(preset);
+    this.graphicsPreset = nextPreset;
+    this.graphics = GRAPHICS_PRESETS[nextPreset];
+    this.renderer.setPixelRatio(this.getRenderPixelRatio());
+    this.camera.far = this.graphics.cameraFar;
+    this.camera.updateProjectionMatrix();
+    this.rearCamera.far = this.graphics.cameraFar;
+    this.rearCamera.updateProjectionMatrix();
+    this.scenerySystem.setQuality({ flockCount: this.graphics.sceneryFlocks });
+    this.weatherSystem.setQuality({ particleBudget: this.graphics.particleBudget });
+    this.hud.setGraphicsPreset(nextPreset);
+    this.hud.setGraphicsPresetStatus(this.getGraphicsPresetStatus());
+    this.updateRearMirrorState();
+    this.handleResize();
+
+    if (persist) {
+      writeStoredValue(GRAPHICS_PRESET_STORAGE_KEY, nextPreset);
+    }
+
+    if (!silent) {
+      this.hud.setMenuStatus(`${this.graphics.label} graphics enabled.`);
+    }
+  }
+
+  getRenderPixelRatio() {
+    const devicePixelRatio = window.devicePixelRatio || 1;
+    return Math.max(
+      0.75,
+      Math.min(devicePixelRatio, this.graphics.maxPixelRatio) * this.graphics.renderScale
+    );
+  }
+
+  getGraphicsPresetStatus() {
+    if (this.graphicsPreset === "high") {
+      return "High pushes sharper rendering, denser particles, more scenery, and the live rear-view mirror.";
+    }
+
+    if (this.graphicsPreset === "medium") {
+      return "Balanced restores some clarity and effects while staying easier to run than High.";
+    }
+
+    return "Low is the default for i5 / 8 GB / Intel integrated graphics. It lowers render resolution, weather particles, scenery, and disables the live rear-view mirror.";
   }
 
   pickNearestLaneTarget(candidateOffset, laneTargets, bounds) {

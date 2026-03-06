@@ -106,6 +106,7 @@ export class WeatherSystem {
     this.holdDuration = 20;
     this.sequence = [0, 1, 2, 1, 3, 1, 4, 1, 5, 1, 0];
     this.maxParticles = 700;
+    this.particleBudget = this.maxParticles;
     this.localOffsets = new Float32Array(this.maxParticles * 3);
     this.positions = new Float32Array(this.maxParticles * 3);
 
@@ -125,6 +126,14 @@ export class WeatherSystem {
     this.scene.add(this.particles);
 
     this.reset();
+  }
+
+  setQuality({ particleBudget = this.maxParticles } = {}) {
+    this.particleBudget = THREE.MathUtils.clamp(
+      Math.floor(particleBudget),
+      0,
+      this.maxParticles
+    );
   }
 
   reset() {
@@ -193,7 +202,7 @@ export class WeatherSystem {
     sunLight.color.copy(new THREE.Color(0xffefcf).lerp(new THREE.Color(0x91b3ff), nightLevel));
 
     const particleType = weather.particleType;
-    const particleCount = Math.floor(this.maxParticles * weather.particleRate);
+    const particleCount = Math.floor(this.particleBudget * weather.particleRate);
     const geometry = this.particles.geometry;
     geometry.setDrawRange(0, particleCount);
 
