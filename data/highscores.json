@@ -1,0 +1,532 @@
+﻿{
+    "scores":  [
+                   {
+                       "id":  "23d0a1a36ed34177bc3005e437eb1d8b",
+                       "name":  "Micah",
+                       "weather":  "Fog",
+                       "createdAt":  "2026-03-06T06:26:11.2585196Z",
+                       "aiEnabled":  false,
+                       "distance":  6443
+                   },
+                   {
+                       "id":  "437627d5d78e465cbc13ef1c1ea7f950",
+                       "name":  "Mic",
+                       "weather":  "Fog",
+                       "createdAt":  "2026-03-06T05:50:15.7856329Z",
+                       "aiEnabled":  true,
+                       "distance":  3526
+                   },
+                   {
+                       "id":  "6c3531994b244c2db435754ce4ae8a3b",
+                       "name":  "Micah",
+                       "weather":  "Rain",
+                       "createdAt":  "2026-03-06T06:36:53.6210526Z",
+                       "aiEnabled":  false,
+                       "distance":  3507
+                   },
+                   {
+                       "id":  "422e8ed5f8c4474fac85950b66d53f3c",
+                       "name":  "Micah",
+                       "weather":  "Rain",
+                       "createdAt":  "2026-03-06T06:27:03.1885904Z",
+                       "aiEnabled":  false,
+                       "distance":  2821
+                   },
+                   {
+                       "id":  "00efebb8c5624c41a74fcb21685e508c",
+                       "name":  "Guest",
+                       "weather":  "Fog",
+                       "createdAt":  "2026-03-06T04:59:34.7463732Z",
+                       "aiEnabled":  false,
+                       "distance":  2660
+                   },
+                   {
+                       "id":  "8cbfb8e9cfc940f5a90a2c70c5fc91dd",
+                       "name":  "M",
+                       "weather":  "Fog",
+                       "createdAt":  "2026-03-06T05:17:22.0124506Z",
+                       "aiEnabled":  false,
+                       "distance":  2481
+                   },
+                   {
+                       "id":  "d7b2c75ee0b2420e9c5101cee76e713d",
+                       "name":  "Guest",
+                       "weather":  "Rain",
+                       "createdAt":  "2026-03-06T06:55:34.9803656Z",
+                       "aiEnabled":  false,
+                       "distance":  2296
+                   },
+                   {
+                       "id":  "70ed00bc8ec044a591729ead3008a6be",
+                       "name":  "Micah",
+                       "weather":  "Clear",
+                       "createdAt":  "2026-03-06T06:40:46.8935717Z",
+                       "aiEnabled":  false,
+                       "distance":  2109
+                   },
+                   {
+                       "id":  "36601581008e441fb9be291b56bfd47c",
+                       "name":  "Micah",
+                       "weather":  "Clear",
+                       "createdAt":  "2026-03-06T06:39:20.5291427Z",
+                       "aiEnabled":  false,
+                       "distance":  2080
+                   },
+                   {
+                       "id":  "7e8cde049cb2497fa7ac17e38a5c141d",
+                       "name":  "Micah",
+                       "weather":  "Clear",
+                       "createdAt":  "2026-03-06T06:38:14.2990918Z",
+                       "aiEnabled":  false,
+                       "distance":  1919
+                   },
+                   {
+                       "id":  "21a1bd71c810457d817a8a90ff94821a",
+                       "name":  "M",
+                       "weather":  "Fog",
+                       "createdAt":  "2026-03-06T05:14:42.8206999Z",
+                       "aiEnabled":  false,
+                       "distance":  1777
+                   },
+                   {
+                       "id":  "b44956004c7c48c6b5ba4e8b604b8aa5",
+                       "name":  "Mic",
+                       "weather":  "Rain",
+                       "createdAt":  "2026-03-06T05:49:00.6250518Z",
+                       "aiEnabled":  true,
+                       "distance":  1730
+                   },
+                   {
+                       "id":  "b79d4a9765b944be928c14a004782d42",
+                       "name":  "Guest",
+                       "weather":  "Clear",
+                       "createdAt":  "2026-03-06T06:47:26.0244773Z",
+                       "aiEnabled":  false,
+                       "distance":  1652
+                   },
+                   {
+                       "id":  "66b06a5c476645728e2306f878053ac1",
+                       "name":  "Mic",
+                       "weather":  "Rain",
+                       "createdAt":  "2026-03-06T05:47:37.6064739Z",
+                       "aiEnabled":  false,
+                       "distance":  1562
+                   },
+                   {
+                       "id":  "ee83b20bde124fa9ac31e3e7c3131039",
+                       "name":  "M",
+                       "weather":  "Fog",
+                       "createdAt":  "2026-03-06T05:20:03.6089460Z",
+                       "aiEnabled":  false,
+                       "distance":  1432
+                   },
+                   {
+                       "id":  "3d368fef206a4ffb983e04b86a71886f",
+                       "name":  "Guest",
+                       "weather":  "Rain",
+                       "createdAt":  "2026-03-06T04:58:23.9008606Z",
+                       "aiEnabled":  false,
+                       "distance":  1414
+                   },
+                   {
+                       "id":  "05154a44beaf440684746fe7c32a2a09",
+                       "name":  "Guest",
+                       "weather":  "Clear",
+                       "createdAt":  "2026-03-06T05:06:12.3165946Z",
+                       "aiEnabled":  false,
+                       "distance":  1399
+                   },
+                   {
+                       "id":  "1b6defd679c44d5e9a6b41b3bb3dd9da",
+                       "name":  "M",
+                       "weather":  "Rain",
+                       "createdAt":  "2026-03-06T05:14:06.6046943Z",
+                       "aiEnabled":  false,
+                       "distance":  1383
+                   },
+                   {
+                       "id":  "417fd4700eac40cea400da038d2abcaf",
+                       "name":  "Micah",
+                       "weather":  "Snow",
+                       "createdAt":  "2026-03-06T06:05:39.5704266Z",
+                       "aiEnabled":  false,
+                       "distance":  1329
+                   },
+                   {
+                       "id":  "d4b85fcb9a374134b0e7b08193f046fd",
+                       "name":  "Guest",
+                       "weather":  "Fog",
+                       "createdAt":  "2026-03-06T04:34:29.2189981Z",
+                       "aiEnabled":  false,
+                       "distance":  1288
+                   },
+                   {
+                       "id":  "edfd2a55e4564381a2be6cda53939fe3",
+                       "name":  "M",
+                       "weather":  "Snow",
+                       "createdAt":  "2026-03-06T05:21:04.7579439Z",
+                       "aiEnabled":  false,
+                       "distance":  1281
+                   },
+                   {
+                       "id":  "603e05553cf7444c97e8ecdf39577432",
+                       "name":  "Guest",
+                       "weather":  "Rain",
+                       "createdAt":  "2026-03-06T05:09:18.2750874Z",
+                       "aiEnabled":  false,
+                       "distance":  1269
+                   },
+                   {
+                       "id":  "8ac30935b8f14331a6d1326c94651996",
+                       "name":  "Guest",
+                       "weather":  "Snow",
+                       "createdAt":  "2026-03-06T05:09:51.7287864Z",
+                       "aiEnabled":  false,
+                       "distance":  1241
+                   },
+                   {
+                       "id":  "459cbf4cc3824ca28fe470065e6a300d",
+                       "name":  "M",
+                       "weather":  "Fog",
+                       "createdAt":  "2026-03-06T05:22:13.6711725Z",
+                       "aiEnabled":  false,
+                       "distance":  1241
+                   },
+                   {
+                       "id":  "4b7659e80c4b421fba16d2c66187b841",
+                       "name":  "Guest",
+                       "weather":  "Fog",
+                       "createdAt":  "2026-03-06T05:00:55.7422170Z",
+                       "aiEnabled":  false,
+                       "distance":  1226
+                   },
+                   {
+                       "id":  "81a3e34d9bce4b7b8ae8f8b15ebad120",
+                       "name":  "Guest",
+                       "weather":  "Clear",
+                       "createdAt":  "2026-03-06T04:58:47.2623386Z",
+                       "aiEnabled":  false,
+                       "distance":  1200
+                   },
+                   {
+                       "id":  "14a46aca8baf491bbb159d344517ff5f",
+                       "name":  "Guest",
+                       "weather":  "Fog",
+                       "createdAt":  "2026-03-06T05:02:18.5225591Z",
+                       "aiEnabled":  false,
+                       "distance":  1159
+                   },
+                   {
+                       "id":  "dfb77414bd4f4d4dadbb71cc5e8533c4",
+                       "name":  "Guest",
+                       "weather":  "Fog",
+                       "createdAt":  "2026-03-06T05:03:03.1413534Z",
+                       "aiEnabled":  false,
+                       "distance":  1131
+                   },
+                   {
+                       "id":  "86a8638df1394a829a1e27ba4d8d6a1b",
+                       "name":  "Micah",
+                       "weather":  "Fog",
+                       "createdAt":  "2026-03-06T05:58:59.8996082Z",
+                       "aiEnabled":  false,
+                       "distance":  1123
+                   },
+                   {
+                       "id":  "b5b7bc05d39840f997c72e1ab78ccffb",
+                       "name":  "Mic",
+                       "weather":  "Clear",
+                       "createdAt":  "2026-03-06T05:48:25.3051053Z",
+                       "aiEnabled":  false,
+                       "distance":  1113
+                   },
+                   {
+                       "id":  "9d5f1eb8281f48f5b38eec1788a22b1a",
+                       "name":  "Guest",
+                       "weather":  "Night",
+                       "createdAt":  "2026-03-06T06:46:53.8421532Z",
+                       "aiEnabled":  false,
+                       "distance":  1106
+                   },
+                   {
+                       "id":  "1aad2d4727fb44168537d0e3c7cbe596",
+                       "name":  "M",
+                       "weather":  "Fog",
+                       "createdAt":  "2026-03-06T05:16:16.5679492Z",
+                       "aiEnabled":  false,
+                       "distance":  1104
+                   },
+                   {
+                       "id":  "7ffa31f292fa4926a37d742c033302e7",
+                       "name":  "M",
+                       "weather":  "Rain",
+                       "createdAt":  "2026-03-06T05:15:36.7185689Z",
+                       "aiEnabled":  false,
+                       "distance":  1087
+                   },
+                   {
+                       "id":  "43bc8e50cb984f0ebc9d35f60d82d1ab",
+                       "name":  "Guest",
+                       "weather":  "Clear",
+                       "createdAt":  "2026-03-06T04:35:39.8068177Z",
+                       "aiEnabled":  false,
+                       "distance":  1069
+                   },
+                   {
+                       "id":  "5c8e725391ba44468281b3bc217cf04b",
+                       "name":  "Guest",
+                       "weather":  "Rain",
+                       "createdAt":  "2026-03-06T04:32:59.9217242Z",
+                       "aiEnabled":  false,
+                       "distance":  1065
+                   },
+                   {
+                       "id":  "2dcbdc4f17af4919833f44a367728c04",
+                       "name":  "Guest",
+                       "weather":  "Fog",
+                       "createdAt":  "2026-03-06T05:07:43.7321127Z",
+                       "aiEnabled":  false,
+                       "distance":  1029
+                   },
+                   {
+                       "id":  "175c0370eb1741188844f42ed9096f4e",
+                       "name":  "Guest",
+                       "weather":  "Rain",
+                       "createdAt":  "2026-03-06T05:08:12.6301226Z",
+                       "aiEnabled":  false,
+                       "distance":  1023
+                   },
+                   {
+                       "id":  "c8918132ef49418c889e75867dd394da",
+                       "name":  "M",
+                       "weather":  "Clear",
+                       "createdAt":  "2026-03-06T05:18:03.5917061Z",
+                       "aiEnabled":  false,
+                       "distance":  1008
+                   },
+                   {
+                       "id":  "991cb854f8ff48eda0d39db78120f37b",
+                       "name":  "Guest",
+                       "weather":  "Snow",
+                       "createdAt":  "2026-03-06T05:07:05.0952761Z",
+                       "aiEnabled":  false,
+                       "distance":  917
+                   },
+                   {
+                       "id":  "50625eb3484044578ba6b28ff8a89484",
+                       "name":  "M",
+                       "weather":  "Clear",
+                       "createdAt":  "2026-03-06T05:19:36.2095906Z",
+                       "aiEnabled":  false,
+                       "distance":  855
+                   },
+                   {
+                       "id":  "d1f5ff41225a47af9d3b8d580a879583",
+                       "name":  "Micah",
+                       "weather":  "Clear",
+                       "createdAt":  "2026-03-06T05:58:24.7692414Z",
+                       "aiEnabled":  false,
+                       "distance":  826
+                   },
+                   {
+                       "id":  "b292515a93ce48389684c3c23623b6ad",
+                       "name":  "Guest",
+                       "weather":  "Night",
+                       "createdAt":  "2026-03-06T06:54:35.8432915Z",
+                       "aiEnabled":  false,
+                       "distance":  821
+                   },
+                   {
+                       "id":  "a49bd6fae17644f1a6159f900cc3f314",
+                       "name":  "Guest",
+                       "weather":  "Fog",
+                       "createdAt":  "2026-03-06T05:01:24.4445185Z",
+                       "aiEnabled":  false,
+                       "distance":  819
+                   },
+                   {
+                       "id":  "e39c32daa378468dabc671588737c52a",
+                       "name":  "Guest",
+                       "weather":  "Rain",
+                       "createdAt":  "2026-03-06T05:08:51.4129462Z",
+                       "aiEnabled":  false,
+                       "distance":  819
+                   },
+                   {
+                       "id":  "368c1bf5db2948ab8b7a9ada7807b250",
+                       "name":  "Guest",
+                       "weather":  "Night",
+                       "createdAt":  "2026-03-06T06:53:59.0465745Z",
+                       "aiEnabled":  false,
+                       "distance":  803
+                   },
+                   {
+                       "id":  "bc065d27e190483f8260ae222c0f511a",
+                       "name":  "M",
+                       "weather":  "Clear",
+                       "createdAt":  "2026-03-06T05:25:36.6810003Z",
+                       "aiEnabled":  false,
+                       "distance":  786
+                   },
+                   {
+                       "id":  "bbb9ad0f34494d0d8ac98a94b1bed9cf",
+                       "name":  "Guest",
+                       "weather":  "Clear",
+                       "createdAt":  "2026-03-06T05:05:48.4531205Z",
+                       "aiEnabled":  false,
+                       "distance":  720
+                   },
+                   {
+                       "id":  "b158d326f35940bc8de329e2060a2e24",
+                       "name":  "Micah",
+                       "weather":  "Night",
+                       "createdAt":  "2026-03-06T06:23:42.3619044Z",
+                       "aiEnabled":  false,
+                       "distance":  700
+                   },
+                   {
+                       "id":  "4cae03a1f9ec4501ae4dae876411efc0",
+                       "name":  "Guest",
+                       "weather":  "Clear",
+                       "createdAt":  "2026-03-06T05:00:20.3816819Z",
+                       "aiEnabled":  false,
+                       "distance":  659
+                   },
+                   {
+                       "id":  "126daec9c4b64a0388cdcc94880f42ca",
+                       "name":  "M",
+                       "weather":  "Clear",
+                       "createdAt":  "2026-03-06T05:21:25.1059861Z",
+                       "aiEnabled":  false,
+                       "distance":  640
+                   },
+                   {
+                       "id":  "b92d2135d3e04f0cb42cf8a7c2ec4255",
+                       "name":  "M",
+                       "weather":  "Clear",
+                       "createdAt":  "2026-03-06T05:25:53.5129369Z",
+                       "aiEnabled":  false,
+                       "distance":  629
+                   },
+                   {
+                       "id":  "f1cc973551694668b0a0d2c88f42ef59",
+                       "name":  "M",
+                       "weather":  "Clear",
+                       "createdAt":  "2026-03-06T05:14:57.6810498Z",
+                       "aiEnabled":  false,
+                       "distance":  623
+                   },
+                   {
+                       "id":  "821c3cdbe3f44778ac916c85c4fae33c",
+                       "name":  "Guest",
+                       "weather":  "Night",
+                       "createdAt":  "2026-03-06T06:46:31.6597673Z",
+                       "aiEnabled":  false,
+                       "distance":  585
+                   },
+                   {
+                       "id":  "e407492d8a8041f9a59f4dde420c4cdf",
+                       "name":  "Guest",
+                       "weather":  "Night",
+                       "createdAt":  "2026-03-06T06:54:13.9952440Z",
+                       "aiEnabled":  false,
+                       "distance":  581
+                   },
+                   {
+                       "id":  "5973e5bfb5b743949a793b0a26d6c5b7",
+                       "name":  "Guest",
+                       "weather":  "Fog",
+                       "createdAt":  "2026-03-06T04:33:36.7781595Z",
+                       "aiEnabled":  false,
+                       "distance":  580
+                   },
+                   {
+                       "id":  "8974e3e7ff27458f927c1f7bd9e0d619",
+                       "name":  "Micah",
+                       "weather":  "Night",
+                       "createdAt":  "2026-03-06T06:39:33.8259547Z",
+                       "aiEnabled":  false,
+                       "distance":  562
+                   },
+                   {
+                       "id":  "926a0916ba4f40d1969c7395ca8a3196",
+                       "name":  "Micah",
+                       "weather":  "Night",
+                       "createdAt":  "2026-03-06T06:29:57.6283028Z",
+                       "aiEnabled":  false,
+                       "distance":  521
+                   },
+                   {
+                       "id":  "587505fd7098469c8cd2ade0dcb6bc51",
+                       "name":  "Micah",
+                       "weather":  "Night",
+                       "createdAt":  "2026-03-06T06:29:32.3178450Z",
+                       "aiEnabled":  false,
+                       "distance":  505
+                   },
+                   {
+                       "id":  "b19b7c06be5e4ad0b7608688bb19b82d",
+                       "name":  "Micah",
+                       "weather":  "Night",
+                       "createdAt":  "2026-03-06T06:40:59.6429910Z",
+                       "aiEnabled":  false,
+                       "distance":  494
+                   },
+                   {
+                       "id":  "cefca53a0c834186b71fe2fe27d51dfb",
+                       "name":  "Micah",
+                       "weather":  "Night",
+                       "createdAt":  "2026-03-06T06:35:44.9525853Z",
+                       "aiEnabled":  false,
+                       "distance":  451
+                   },
+                   {
+                       "id":  "77c19c301a9149b2994dd37ef0a0383a",
+                       "name":  "Micah",
+                       "weather":  "Night",
+                       "createdAt":  "2026-03-06T06:29:45.1659063Z",
+                       "aiEnabled":  false,
+                       "distance":  430
+                   },
+                   {
+                       "id":  "24495c62850b472581c304c6b17c414a",
+                       "name":  "Guest",
+                       "weather":  "Clear",
+                       "createdAt":  "2026-03-06T05:06:27.1140624Z",
+                       "aiEnabled":  false,
+                       "distance":  425
+                   },
+                   {
+                       "id":  "b7f3f18e2f6b4c9b926a024835cc6312",
+                       "name":  "Micah",
+                       "weather":  "Night",
+                       "createdAt":  "2026-03-06T06:38:39.2791209Z",
+                       "aiEnabled":  false,
+                       "distance":  382
+                   },
+                   {
+                       "id":  "6f6646bb1bbc4df0a404b303f5ee0480",
+                       "name":  "Guest",
+                       "weather":  "Clear",
+                       "createdAt":  "2026-03-06T05:01:32.4263949Z",
+                       "aiEnabled":  false,
+                       "distance":  329
+                   },
+                   {
+                       "id":  "18d7e5b631d44bcea3e9e598fc7303a0",
+                       "name":  "M",
+                       "weather":  "Clear",
+                       "createdAt":  "2026-03-06T05:17:41.3628187Z",
+                       "aiEnabled":  false,
+                       "distance":  221
+                   },
+                   {
+                       "id":  "83a6e798a6304acb866a9eb0d8454a9f",
+                       "name":  "Guest",
+                       "weather":  "Clear",
+                       "createdAt":  "2026-03-06T06:57:38.1029309Z",
+                       "aiEnabled":  false,
+                       "distance":  1266
+                   }
+               ]
+}

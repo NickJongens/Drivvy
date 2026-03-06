@@ -1,0 +1,14 @@
+{
+  "name": "drivvy",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Procedural Three.js browser racing game with local file-backed highscores.",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
