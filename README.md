@@ -4,6 +4,14 @@ Procedural Three.js browser racing game with a Docker-first Node server, local f
 
 ## Run With Docker
 
+Published image:
+
+```bash
+docker pull ghcr.io/nickjongens/drivvy:latest
+```
+
+GHCR package: [github.com/NickJongens/Drivvy/pkgs/container/drivvy](https://github.com/NickJongens/Drivvy/pkgs/container/drivvy)
+
 Build the image:
 
 ```bash
@@ -13,7 +21,7 @@ docker build -t drivvy .
 Run it on port `8080` with persistent local data:
 
 ```bash
-docker run --rm -p 8080:8080 -v drivvy-data:/app/data drivvy
+docker run --rm -p 8080:8080 -v drivvy-data:/app/data ghcr.io/nickjongens/drivvy:latest
 ```
 
 Open `http://localhost:8080`.
@@ -23,7 +31,7 @@ Open `http://localhost:8080`.
 Stats routes are public by default. To require a key for stats access, set `DRIVVY_STATS_API_KEY` when starting the container:
 
 ```bash
-docker run --rm -p 8080:8080 -e DRIVVY_STATS_API_KEY=replace-me -v drivvy-data:/app/data drivvy
+docker run --rm -p 8080:8080 -e DRIVVY_STATS_API_KEY=replace-me -v drivvy-data:/app/data ghcr.io/nickjongens/drivvy:latest
 ```
 
 When that env var is present, send either:
