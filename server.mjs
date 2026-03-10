@@ -13,10 +13,9 @@ const DATA_DIR = path.join(ROOT, "data");
 const HIGH_SCORES_PATH = path.join(DATA_DIR, "highscores.json");
 const STATS_PATH = path.join(DATA_DIR, "stats.json");
 const MAX_SCORES = 250;
-const MULTIPLAYER_TARGET_DISTANCE = 3000;
+const MULTIPLAYER_TARGET_DISTANCE = 10000;
 const MULTIPLAYER_COUNTDOWN_MS = 5000;
 const FEATURED_NAME = "Nick Jongens";
-const FEATURED_GAP_METRES = 6;
 const MAX_TRACKED_VISITORS = 250;
 const MAX_RECENT_EVENTS = 200;
 const STATS_API_KEY = String(process.env.DRIVVY_STATS_API_KEY || process.env.STATS_API_KEY || "").trim();
@@ -328,13 +327,28 @@ async function handleHighScores(request, response) {
 }
 
 function buildFeaturedLeaderboardEntry(scores) {
+  if (scores.some((entry) => normalizeName(entry.name) === FEATURED_NAME)) {
+    return null;
+  }
+
+  const topDistance = scores[0]?.distance ?? 0;
+  const secondDistance = scores[1]?.distance ?? 0;
+  let distance = 1480;
+
+  if (topDistance > 0 && secondDistance > 0) {
+    const gap = Math.max(4, Math.round(Math.max(topDistance - secondDistance, 10) * 0.55));
+    distance = Math.max(secondDistance, topDistance - gap);
+  } else if (topDistance > 0) {
+    distance = Math.max(24, topDistance - Math.max(12, Math.round(topDistance * 0.04)));
+  }
+
   return {
-    id: "house-best-nick-jongens",
+    id: "featured-nick-jongens",
     name: FEATURED_NAME,
-    distance: (scores[0]?.distance ?? 0) + FEATURED_GAP_METRES,
-    createdAt: null,
-    badge: "House Best",
-    isPinned: true,
+    distance,
+    createdAt: new Date(0).toISOString(),
+    badge: "",
+    isPinned: false,
   };
 }
 

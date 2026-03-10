@@ -46,16 +46,8 @@
 
         <div class="hud-panel hud-panel--stats">
           <div class="hud-stat">
-            <span class="hud-label">Speed</span>
-            <strong id="speed-value">0 km/h</strong>
-          </div>
-          <div class="hud-stat">
             <span class="hud-label">Distance</span>
             <strong id="distance-value">0 m</strong>
-          </div>
-          <div class="hud-stat">
-            <span class="hud-label">Weather</span>
-            <strong id="weather-value">Clear</strong>
           </div>
           <div class="hud-stat">
             <span class="hud-label">Lane</span>
@@ -75,16 +67,9 @@
           </div>
         </div>
 
-        <div class="hud-panel hud-panel--controls">
+        <div id="controls-panel" class="hud-panel hud-panel--controls">
           <span class="hud-label">Controls</span>
-          <p>
-            Mouse to steer, left click to accelerate, right click to brake. Use W or Up to accelerate,
-            A/D or Left/Right to steer, S or Down to brake, and Shift or Space to fire NOS. Gamepads
-            use left stick or d-pad to steer, RT/A to accelerate, LT/B to brake, and X/Y or shoulder
-            buttons for NOS. Press C for cockpit view, and hold V to look behind.
-            Read the traffic, grab spaced-out NOSlow canisters, and keep the cops in sight without
-            letting them box you in.
-          </p>
+          <p>Steer, accelerate, brake, use NOS, and avoid traffic. Press C for cockpit view. Esc opens the menu.</p>
         </div>
       </div>
 
@@ -118,7 +103,7 @@
           <section id="multiplayer-menu-panel" class="multiplayer-panel menu-panel is-hidden" aria-labelledby="multiplayer-heading">
             <div class="multiplayer-panel__head">
               <div>
-                <span class="hud-kicker">Private Sprint</span>
+                <span class="hud-kicker">Private Race</span>
                 <h3 id="multiplayer-heading">Lobby Race</h3>
               </div>
               <p id="multiplayer-status" class="menu-status menu-status--left">
@@ -142,7 +127,7 @@
                   <span class="hud-label">Current Lobby</span>
                   <strong id="multiplayer-lobby-code">------</strong>
                 </div>
-                <span class="multiplayer-lobby__hint">3 km shared sprint</span>
+                <span class="multiplayer-lobby__hint">10 km traffic race</span>
               </div>
               <ul id="multiplayer-player-list" class="multiplayer-player-list"></ul>
               <div class="menu-actions">

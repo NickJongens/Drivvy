@@ -1,5 +1,4 @@
 const FEATURED_NAME = "Nick Jongens";
-const FEATURED_GAP_METRES = 6;
 const DEFAULT_LIMIT = 10;
 const CACHE_KEY = "drivvy.highscores.cache";
 
@@ -88,24 +87,45 @@ export class LeaderboardService {
     const realEntries = scores
       .map((entry) => this.normalizeEntry(entry))
       .filter(Boolean)
-      .sort((entryA, entryB) => this.compareEntries(entryA, entryB))
-      .slice(0, limit);
+      .sort((entryA, entryB) => this.compareEntries(entryA, entryB));
 
-    const featuredEntry = {
-      id: "house-best-nick-jongens",
-      name: FEATURED_NAME,
-      distance: (realEntries[0]?.distance ?? 0) + FEATURED_GAP_METRES,
-      aiEnabled: false,
-      weather: "Clear",
-      createdAt: null,
-      badge: "House Best",
-      isPinned: true,
-    };
+    const featuredEntry = this.buildFeaturedEntry(realEntries);
+    const entries = featuredEntry
+      ? this.mergeScores(realEntries, [featuredEntry]).slice(0, limit)
+      : realEntries.slice(0, limit);
 
     return {
-      entries: [featuredEntry, ...realEntries],
-      realEntries,
+      entries,
+      realEntries: entries,
       savedEntry: savedEntry ? this.normalizeEntry(savedEntry) : null,
+    };
+  }
+
+  buildFeaturedEntry(scores) {
+    if (scores.some((entry) => entry.name === FEATURED_NAME)) {
+      return null;
+    }
+
+    const topDistance = scores[0]?.distance ?? 0;
+    const secondDistance = scores[1]?.distance ?? 0;
+    let distance = 1480;
+
+    if (topDistance > 0 && secondDistance > 0) {
+      const gap = Math.max(4, Math.round(Math.max(topDistance - secondDistance, 10) * 0.55));
+      distance = Math.max(secondDistance, topDistance - gap);
+    } else if (topDistance > 0) {
+      distance = Math.max(24, topDistance - Math.max(12, Math.round(topDistance * 0.04)));
+    }
+
+    return {
+      id: "featured-nick-jongens",
+      name: FEATURED_NAME,
+      distance,
+      aiEnabled: false,
+      weather: "Clear",
+      createdAt: new Date(0).toISOString(),
+      badge: "",
+      isPinned: false,
     };
   }
 

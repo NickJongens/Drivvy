@@ -32,13 +32,16 @@ export class TrafficSystem {
     this.time = 0;
   }
 
-  update(delta, player, weather) {
+  update(delta, player, weather, { allowPolice = true, allowRacers = true } = {}) {
     this.time += delta;
     const activeRouteId = player.route.branchId || "main";
     const policeCount = this.countVehiclesOnRoute(activeRouteId, "police");
-    const trafficPulse = Math.max(0, Math.sin(this.time * 0.12 + 0.8)) * 0.85;
-    const trafficTarget = Math.max(5, Math.round(5.6 + weather.trafficModifier * 2.2 + trafficPulse) - policeCount);
-    const spawnHorizon = player.s + 290 + weather.visibility * 110;
+    const adaptiveTraffic = this.getAdaptiveTrafficProfile(activeRouteId, player, weather);
+    const trafficTarget = Math.max(
+      4,
+      Math.round(5.4 + weather.trafficModifier * 2 + adaptiveTraffic.densityOffset) - policeCount
+    );
+    const spawnHorizon = player.s + 270 + weather.visibility * 92 + adaptiveTraffic.horizonOffset;
     let spawnCursor = this.routeSpawnCursor.get(activeRouteId) ?? player.s + 90;
     let attempts = 0;
 
@@ -53,13 +56,18 @@ export class TrafficSystem {
     this.ensureVisibleTrafficAhead(player, weather, activeRouteId);
 
     const racerTarget = activeRouteId === "main" ? (player.s > 900 ? 2 : 1) : 0;
-    if (activeRouteId === "main" && this.countVehiclesOnRoute(activeRouteId, "racer") < racerTarget && player.s >= this.nextRacerSpawnS) {
+    if (
+      allowRacers &&
+      activeRouteId === "main" &&
+      this.countVehiclesOnRoute(activeRouteId, "racer") < racerTarget &&
+      player.s >= this.nextRacerSpawnS
+    ) {
       if (this.spawnRacer(player, activeRouteId)) {
         this.nextRacerSpawnS = player.s + (player.s > 900 ? 430 : RACER_SPAWN_INTERVAL) + Math.random() * 180;
       }
     }
 
-    if (activeRouteId === "main" && policeCount < 1 && player.s >= this.nextPoliceSpawnS) {
+    if (allowPolice && activeRouteId === "main" && policeCount < 1 && player.s >= this.nextPoliceSpawnS) {
       if (this.spawnPoliceTrap(player)) {
         this.nextPoliceSpawnS = player.s + POLICE_SPAWN_INTERVAL + Math.random() * 220;
       }
@@ -115,6 +123,30 @@ export class TrafficSystem {
       const extraRoll = vehicle.kind === "police" && vehicle.mode === "parked" ? vehicle.shoulderSide * 0.08 : 0;
       this.track.placeAlongTrack(vehicle.mesh, vehicle.s, vehicle.laneOffset, vehicle.height, extraRoll, vehicle.routeId);
     }
+  }
+
+  getAdaptiveTrafficProfile(routeId, player, weather) {
+    const playerLaneIndex = this.getNearestLaneIndex(player.laneOffset);
+    const laneMetrics = this.getLaneMetrics(routeId, playerLaneIndex, player.s);
+    const aheadGap = Number.isFinite(laneMetrics.aheadGap) ? laneMetrics.aheadGap : 120;
+    const lateGameFactor = THREE.MathUtils.smoothstep(player.s, 2600, 11000);
+    const clearRoadFactor = THREE.MathUtils.clamp((aheadGap - 26) / 54, 0, 1);
+    const congestionFactor = 1 - clearRoadFactor;
+    const speedFactor = THREE.MathUtils.clamp(
+      (player.speed - player.baseCruiseSpeed) / Math.max(player.baseMaxSpeed - player.baseCruiseSpeed, 1),
+      0,
+      1
+    );
+    const wave = Math.sin(this.time * 0.09 + player.s * 0.0015);
+    const adaptivePush = lateGameFactor * clearRoadFactor * speedFactor * 1.8;
+    const adaptiveRelief =
+      lateGameFactor *
+      ((player.speed < player.baseCruiseSpeed * 0.92 ? 0.9 : 0) + congestionFactor * 1.6);
+
+    return {
+      densityOffset: wave * lateGameFactor * 1.25 + adaptivePush - adaptiveRelief,
+      horizonOffset: Math.round(lateGameFactor * 42 + adaptivePush * 26 - adaptiveRelief * 24),
+    };
   }
 
   updatePoliceVehicle(vehicle, player, weather) {

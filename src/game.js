@@ -15,6 +15,7 @@ import { LANE_WIDTH, TrackManager } from "./world/TrackManager.js";
 const CAMERA_LAG = 5.5;
 const LOOK_LAG = 6.5;
 const FPV_CAMERA_LAG = 8.5;
+const CONTROLS_HINT_DURATION = 7;
 const MAIN_LANE_OFFSETS = [-LANE_WIDTH, 0, LANE_WIDTH];
 const LANE_OCCUPANCY_THRESHOLD = LANE_WIDTH * 0.58;
 const AUTOPILOT_STORAGE_KEY = "drivvy.aiAssist";
@@ -204,6 +205,8 @@ export class Game {
     this.pursuitState = { active: false, activeCount: 0, nearestGap: null };
     this.crashOverlayDelay = 0;
     this.crashDistance = 0;
+    this.controlsHintTime = 0;
+    this.multiplayerTrafficPenaltyTime = 0;
     this.hasRunStarted = false;
     this.menuCanResume = false;
     this.scoreSubmitted = false;
@@ -302,6 +305,7 @@ export class Game {
     this.hud.setGraphicsPreset(this.graphicsPreset);
     this.hud.setPlayerName(readStoredValue(PLAYER_NAME_STORAGE_KEY, "", LEGACY_PLAYER_NAME_STORAGE_KEY));
     this.hud.setMultiplayerStatus(this.multiplayer.status);
+    this.hud.setControlsVisible(true);
     this.applyGraphicsPreset(this.graphicsPreset, { persist: false, silent: true });
     this.syncTrackingConsentUi();
     this.handleResize();
@@ -440,6 +444,7 @@ export class Game {
     this.attractTime = 0;
     this.crashOverlayDelay = 0;
     this.crashDistance = 0;
+    this.multiplayerTrafficPenaltyTime = 0;
     this.input.resetState();
     this.player.nosCharge = 12;
     this.player.coins = 0;
@@ -474,6 +479,8 @@ export class Game {
     this.resetRun({ seed: this.createSoloSeed() });
     this.setViewMode("chase", { snap: true, resetLookBehind: true });
     this.player.speed = this.player.baseCruiseSpeed * 0.7;
+    this.controlsHintTime = CONTROLS_HINT_DURATION;
+    this.hud.setControlsVisible(true);
     this.hasRunStarted = true;
     this.menuCanResume = false;
     this.state = "running";
@@ -489,6 +496,8 @@ export class Game {
     }
 
     this.capturePlayerName();
+    this.controlsHintTime = CONTROLS_HINT_DURATION;
+    this.hud.setControlsVisible(true);
     this.menuCanResume = false;
     this.state = "running";
     this.hud.hideMenu();
@@ -508,6 +517,8 @@ export class Game {
 
     this.capturePlayerName();
     this.input.resetState();
+    this.controlsHintTime = 0;
+    this.hud.setControlsVisible(true);
     this.menuCanResume = canResume;
     this.hud.showMenu({
       canResume,
@@ -715,6 +726,7 @@ export class Game {
     this.updateSkyAccent();
     this.updateCrashEffect(delta);
     this.updateCrashOverlay(delta);
+    this.updateControlsHint(delta);
     this.hud.update({
       speed: this.player.speed,
       distance: this.player.s,
@@ -753,8 +765,8 @@ export class Game {
   }
 
   updateMultiplayer(delta) {
-    this.weather = { ...MULTIPLAYER_CLEAR_WEATHER };
-    const countdownSeconds = Math.max(0, (this.multiplayer.race.startAt - Date.now()) / 1000);
+      this.weather = { ...MULTIPLAYER_CLEAR_WEATHER };
+      const countdownSeconds = Math.max(0, (this.multiplayer.race.startAt - Date.now()) / 1000);
 
     if (countdownSeconds <= 0) {
       this.updatePlayer(delta, this.weather);
@@ -773,9 +785,21 @@ export class Game {
       -this.player.steerVisual * 0.18,
       this.player.route
     );
+    this.trafficSystem.update(delta, this.player, {
+      ...this.weather,
+      trafficModifier: 0.92,
+    }, {
+      allowPolice: false,
+      allowRacers: false,
+    });
     this.scenerySystem.update(delta, this.player.s, this.player.route);
     this.updateRemotePlayers(delta);
     this.syncMultiplayerPlayerState(delta);
+    this.multiplayerTrafficPenaltyTime = Math.max(0, this.multiplayerTrafficPenaltyTime - delta);
+
+    if (this.multiplayerTrafficPenaltyTime === 0 && this.trafficSystem.checkCollision(this.player)) {
+      this.applyMultiplayerTrafficPenalty();
+    }
 
     if (!this.multiplayer.race.finished && this.player.s >= this.multiplayer.race.targetDistance) {
       this.multiplayer.race.finished = true;
@@ -893,6 +917,29 @@ export class Game {
       delta
     );
     this.player.s += this.player.speed * delta;
+  }
+
+  applyMultiplayerTrafficPenalty() {
+    this.multiplayerTrafficPenaltyTime = 1.4;
+    this.player.speed = Math.min(this.player.speed, Math.max(7, this.player.baseCruiseSpeed * 0.45));
+    this.player.lateralVelocity *= -0.18;
+    this.player.nosCharge = Math.max(0, this.player.nosCharge - 8);
+    this.hud.setMultiplayerStatus("Traffic hit. Speed lost.");
+  }
+
+  updateControlsHint(delta) {
+    if (this.state !== "running") {
+      this.hud.setControlsVisible(true);
+      return;
+    }
+
+    if (this.controlsHintTime > 0) {
+      this.controlsHintTime = Math.max(0, this.controlsHintTime - delta);
+      this.hud.setControlsVisible(true);
+      return;
+    }
+
+    this.hud.setControlsVisible(false);
   }
 
   getAutoPilotCommand(bounds, weather) {
@@ -1883,7 +1930,7 @@ export class Game {
     this.resetMultiplayerRaceState();
     this.multiplayer.race.active = true;
     this.multiplayer.race.startAt = Number(message.startAt) || Date.now();
-    this.multiplayer.race.targetDistance = Number(message.targetDistance) || 3000;
+    this.multiplayer.race.targetDistance = Number(message.targetDistance) || 10000;
     this.multiplayer.race.trackSeed = Number(message.trackSeed) || 1;
     this.multiplayer.lastRaceState = null;
 
@@ -1892,11 +1939,13 @@ export class Game {
       multiplayer: true,
     });
     this.hasRunStarted = true;
+    this.controlsHintTime = CONTROLS_HINT_DURATION;
+    this.hud.setControlsVisible(true);
     this.menuCanResume = false;
     this.state = "running";
     this.hud.hideMenu();
     this.hud.hideTrackingConsent();
-    this.hud.setMultiplayerStatus("Sprint countdown started.");
+    this.hud.setMultiplayerStatus("10 km race countdown started.");
     this.recordRunTelemetry("multiplayer", this.multiplayer.race.trackSeed);
     this.clock.getDelta();
   }

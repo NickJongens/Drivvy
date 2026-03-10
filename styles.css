@@ -291,6 +291,10 @@ select {
   grid-row: 3;
   align-self: end;
   padding: 0.9rem 1rem 1rem;
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease,
+    visibility 220ms ease;
 }
 
 .hud-panel--controls p {
@@ -298,6 +302,12 @@ select {
   color: var(--text-muted);
   font-size: 0.84rem;
   line-height: 1.5;
+}
+
+.hud-panel--controls.is-hidden-by-timer {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(0.75rem);
 }
 
 .overlay {

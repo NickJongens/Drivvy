@@ -5,9 +5,7 @@ const game = new Game({
   rearMirrorFrame: document.getElementById("rearview-mirror"),
   cockpitFrame: document.getElementById("cockpit-frame"),
   hudElements: {
-    speed: document.getElementById("speed-value"),
     distance: document.getElementById("distance-value"),
-    weather: document.getElementById("weather-value"),
     lane: document.getElementById("lane-value"),
     nos: document.getElementById("nos-value"),
     coins: document.getElementById("coins-value"),
@@ -47,6 +45,7 @@ const game = new Game({
     leftIndicator: document.getElementById("turn-indicator-left"),
     rightIndicator: document.getElementById("turn-indicator-right"),
     menuTrigger: document.getElementById("menu-trigger"),
+    controlsPanel: document.getElementById("controls-panel"),
     graphicsPresetSelect: document.getElementById("graphics-preset-select"),
     graphicsPresetStatus: document.getElementById("graphics-preset-status"),
     trackingConsent: document.getElementById("tracking-consent"),

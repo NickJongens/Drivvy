@@ -42,6 +42,7 @@ export class Hud {
     leftIndicator,
     rightIndicator,
     menuTrigger,
+    controlsPanel,
     graphicsPresetSelect,
     graphicsPresetStatus,
     trackingConsent,
@@ -91,6 +92,7 @@ export class Hud {
     this.leftIndicator = leftIndicator;
     this.rightIndicator = rightIndicator;
     this.menuTrigger = menuTrigger;
+    this.controlsPanel = controlsPanel;
     this.graphicsPresetSelect = graphicsPresetSelect;
     this.graphicsPresetStatus = graphicsPresetStatus;
     this.trackingConsent = trackingConsent;
@@ -131,10 +133,18 @@ export class Hud {
     race = "Solo",
     assist,
   }) {
-    this.speed.textContent = `${Math.round(speed * 3.6)} km/h`;
-    this.distance.textContent = `${Math.round(distance)} m`;
-    this.weather.textContent = weather;
-    this.lane.textContent = lane;
+    if (this.speed) {
+      this.speed.textContent = `${Math.round(speed * 3.6)} km/h`;
+    }
+    if (this.distance) {
+      this.distance.textContent = `${Math.round(distance)} m`;
+    }
+    if (this.weather) {
+      this.weather.textContent = weather;
+    }
+    if (this.lane) {
+      this.lane.textContent = lane;
+    }
     if (this.nos) {
       this.nos.textContent = `${Math.round(nos)}%`;
     }
@@ -193,6 +203,10 @@ export class Hud {
 
   setMenuStatus(message) {
     this.menuStatus.textContent = message;
+  }
+
+  setControlsVisible(visible) {
+    this.controlsPanel?.classList.toggle("is-hidden-by-timer", !visible);
   }
 
   showTrackingConsent() {
@@ -387,11 +401,11 @@ export class Hud {
     let displayRank = 1;
     topEntries.forEach((entry) => {
       const row = document.createElement("li");
-      row.className = entry.isPinned ? "leaderboard-row leaderboard-row--featured" : "leaderboard-row";
+      row.className = "leaderboard-row";
 
       const rank = document.createElement("span");
       rank.className = "leaderboard-rank";
-      rank.textContent = entry.isPinned ? "Bench" : `#${displayRank}`;
+      rank.textContent = `#${displayRank}`;
 
       const name = document.createElement("span");
       name.className = "leaderboard-name";
@@ -406,15 +420,13 @@ export class Hud {
       const badgeText = entry.badge || (entry.aiEnabled ? "AI" : "");
       if (badgeText) {
         const badge = document.createElement("span");
-        badge.className = entry.isPinned ? "leaderboard-badge leaderboard-badge--featured" : "leaderboard-badge";
+        badge.className = "leaderboard-badge";
         badge.textContent = badgeText;
         row.appendChild(badge);
       }
 
       this.leaderboardList.appendChild(row);
-      if (!entry.isPinned) {
-        displayRank += 1;
-      }
+      displayRank += 1;
     });
   }
 
