@@ -5,6 +5,7 @@ export class Hud {
     weather,
     lane,
     nos,
+    nosFill,
     coins,
     pursuit,
     race,
@@ -49,8 +50,10 @@ export class Hud {
     multiplayerLobbyCard,
     multiplayerLobbyCode,
     multiplayerPlayerList,
+    multiplayerWaitingList,
     multiplayerCreateButton,
     multiplayerJoinButton,
+    multiplayerRefreshButton,
     multiplayerReadyButton,
     multiplayerStartButton,
     multiplayerLeaveButton,
@@ -72,6 +75,7 @@ export class Hud {
     this.weather = weather;
     this.lane = lane;
     this.nos = nos;
+    this.nosFill = nosFill;
     this.coins = coins;
     this.pursuit = pursuit;
     this.race = race;
@@ -116,8 +120,10 @@ export class Hud {
     this.multiplayerLobbyCard = multiplayerLobbyCard;
     this.multiplayerLobbyCode = multiplayerLobbyCode;
     this.multiplayerPlayerList = multiplayerPlayerList;
+    this.multiplayerWaitingList = multiplayerWaitingList;
     this.multiplayerCreateButton = multiplayerCreateButton;
     this.multiplayerJoinButton = multiplayerJoinButton;
+    this.multiplayerRefreshButton = multiplayerRefreshButton;
     this.multiplayerReadyButton = multiplayerReadyButton;
     this.multiplayerStartButton = multiplayerStartButton;
     this.multiplayerLeaveButton = multiplayerLeaveButton;
@@ -171,7 +177,11 @@ export class Hud {
       this.speed.textContent = `${Math.round(speed * 3.6)} km/h`;
     }
     if (this.distance) {
-      this.distance.textContent = `${Math.round(distance)} m`;
+      const roundedDistance = Math.max(0, distance);
+      this.distance.textContent =
+        roundedDistance >= 1000
+          ? `${(roundedDistance / 1000).toFixed(1)} km`
+          : `${Math.round(roundedDistance)} m`;
     }
     if (this.weather) {
       this.weather.textContent = weather;
@@ -180,7 +190,18 @@ export class Hud {
       this.lane.textContent = lane;
     }
     if (this.nos) {
-      this.nos.textContent = `${Math.round(nos)}%`;
+      if (nos >= 55) {
+        this.nos.textContent = "Full";
+      } else if (nos >= 22) {
+        this.nos.textContent = "Ready";
+      } else if (nos > 1) {
+        this.nos.textContent = "Low";
+      } else {
+        this.nos.textContent = "Empty";
+      }
+    }
+    if (this.nosFill) {
+      this.nosFill.style.width = `${Math.max(0, Math.min(100, nos))}%`;
     }
     if (this.coins) {
       this.coins.textContent = `${Math.round(coins)}`;
@@ -242,7 +263,7 @@ export class Hud {
   }
 
   showMenu({ canResume = false, aiEnabled = false, mode = this.menuMode } = {}) {
-    this.menuPlayButton.textContent = canResume ? "Resume Run" : "Start Run";
+    this.menuPlayButton.textContent = canResume ? "Resume" : "Drive";
     this.menuNewRunButton.classList.toggle("is-hidden", !canResume);
     this.menuOverlay.classList.remove("is-hidden");
     this.setAiEnabled(aiEnabled);
@@ -289,7 +310,6 @@ export class Hud {
   setFullscreenAvailable(available) {
     if (this.fullscreenToggle) {
       this.fullscreenToggle.disabled = !available;
-      this.fullscreenToggle.classList.toggle("is-hidden", !available);
     }
   }
 
@@ -298,7 +318,7 @@ export class Hud {
       return;
     }
 
-    this.fullscreenToggle.textContent = active ? "Exit Full" : "Full Screen";
+    this.fullscreenToggle.textContent = active ? "Fullscreen: On" : "Fullscreen: Off";
     this.fullscreenToggle.setAttribute("aria-pressed", active ? "true" : "false");
   }
 
@@ -446,6 +466,49 @@ export class Hud {
     }
     if (this.multiplayerLeaveButton) {
       this.multiplayerLeaveButton.disabled = true;
+    }
+  }
+
+  renderWaitingLobbies(lobbies = []) {
+    if (!this.multiplayerWaitingList) {
+      return;
+    }
+
+    this.multiplayerWaitingList.innerHTML = "";
+    if (!lobbies.length) {
+      const empty = document.createElement("li");
+      empty.className = "multiplayer-waiting-empty";
+      empty.textContent = "No open races right now.";
+      this.multiplayerWaitingList.appendChild(empty);
+      return;
+    }
+
+    for (const lobby of lobbies) {
+      const row = document.createElement("li");
+      row.className = "multiplayer-waiting";
+
+      const meta = document.createElement("div");
+      meta.className = "multiplayer-waiting__meta";
+
+      const title = document.createElement("strong");
+      title.textContent = lobby.code;
+
+      const detail = document.createElement("span");
+      detail.textContent = `${lobby.hostName} · ${lobby.playerCount} driver${lobby.playerCount === 1 ? "" : "s"}`;
+
+      meta.append(title, detail);
+
+      const joinButton = document.createElement("button");
+      joinButton.type = "button";
+      joinButton.className = "ghost-button";
+      joinButton.textContent = "Join";
+      joinButton.addEventListener("click", () => {
+        this.setLobbyCode(lobby.code);
+        this.onWaitingLobbyJoin?.(lobby.code);
+      });
+
+      row.append(meta, joinButton);
+      this.multiplayerWaitingList.appendChild(row);
     }
   }
 
@@ -625,6 +688,14 @@ export class Hud {
 
   setMultiplayerJoinHandler(handler) {
     this.multiplayerJoinButton?.addEventListener("click", handler);
+  }
+
+  setMultiplayerRefreshHandler(handler) {
+    this.multiplayerRefreshButton?.addEventListener("click", handler);
+  }
+
+  setWaitingLobbyJoinHandler(handler) {
+    this.onWaitingLobbyJoin = handler;
   }
 
   setMultiplayerReadyHandler(handler) {

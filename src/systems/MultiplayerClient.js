@@ -13,6 +13,7 @@ export class MultiplayerClient {
 
     this.onStatus = null;
     this.onLobbyState = null;
+    this.onWaitingLobbies = null;
     this.onRaceStarted = null;
     this.onRaceState = null;
     this.onRaceFinished = null;
@@ -88,6 +89,11 @@ export class MultiplayerClient {
     this.send({ type: "start_race" });
   }
 
+  async requestWaitingLobbies() {
+    await this.connect();
+    this.send({ type: "list_lobbies" });
+  }
+
   sendPlayerState(state) {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
       return;
@@ -122,6 +128,9 @@ export class MultiplayerClient {
       case "lobby_state":
         this.lobbyCode = message.lobbyCode || null;
         this.onLobbyState?.(message);
+        break;
+      case "waiting_lobbies":
+        this.onWaitingLobbies?.(message);
         break;
       case "race_started":
         this.onRaceStarted?.(message);

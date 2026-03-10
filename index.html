@@ -36,44 +36,37 @@
       </div>
 
       <div id="hud">
-        <button id="fullscreen-toggle" class="hud-float-button" type="button" aria-label="Toggle fullscreen">
-          Full Screen
-        </button>
-
         <div class="hud-panel hud-panel--title">
           <button id="menu-trigger" class="stealth-button" type="button" aria-label="Open game menu">
             <span class="hud-kicker">Procedural Chase</span>
             <h1>Drivvy</h1>
           </button>
-          <p class="hud-statusline">Esc opens the menu.</p>
+          <p id="race-value" class="hud-statusline">Single player</p>
         </div>
 
         <div class="hud-panel hud-panel--stats">
           <div class="hud-stat">
+            <span class="hud-label">Speed</span>
+            <strong id="speed-value">0 km/h</strong>
+          </div>
+          <div class="hud-stat">
             <span class="hud-label">Distance</span>
             <strong id="distance-value">0 m</strong>
           </div>
-          <div class="hud-stat">
-            <span class="hud-label">Lane</span>
-            <strong id="lane-value">Center Lane</strong>
-          </div>
-          <div class="hud-stat">
-            <span class="hud-label">NOS</span>
-            <strong id="nos-value">0%</strong>
-          </div>
-          <div class="hud-stat">
-            <span class="hud-label">Pursuit</span>
-            <strong id="pursuit-value">Clear</strong>
-          </div>
-          <div class="hud-stat">
-            <span class="hud-label">Race</span>
-            <strong id="race-value">Solo</strong>
+          <div class="hud-stat hud-stat--meter">
+            <div class="hud-stat__head">
+              <span class="hud-label">NOS</span>
+              <strong id="nos-value" class="hud-meter-state">Ready</strong>
+            </div>
+            <div class="hud-meter" aria-hidden="true">
+              <span id="nos-fill" class="hud-meter__fill"></span>
+            </div>
           </div>
         </div>
 
         <div id="controls-panel" class="hud-panel hud-panel--controls">
           <span class="hud-label">Controls</span>
-          <p>Steer, accelerate, brake, use NOS, and avoid traffic. Press C for cockpit view. Esc opens the menu.</p>
+          <p>Steer, brake, boost. Press C for cockpit view. Menu opens pause.</p>
         </div>
       </div>
 
@@ -84,43 +77,51 @@
               <h2>Drivvy</h2>
             </button>
 
-          <p class="menu-copy">Pick a mode and drive.</p>
+          <p class="menu-copy">Pick a mode and go.</p>
 
           <div class="menu-mode" role="tablist" aria-label="Game mode">
-            <button id="menu-solo-tab" class="mode-button is-active" type="button" data-mode="solo">Single Player</button>
-            <button id="menu-multiplayer-tab" class="mode-button" type="button" data-mode="multiplayer">
-              Multiplayer
-            </button>
-            <button id="menu-options-tab" class="mode-button" type="button" data-mode="options">Options</button>
+            <button id="menu-solo-tab" class="mode-button is-active" type="button" data-mode="solo">Solo</button>
+            <button id="menu-multiplayer-tab" class="mode-button" type="button" data-mode="multiplayer">Online</button>
+            <button id="menu-options-tab" class="mode-button" type="button" data-mode="options">Settings</button>
           </div>
 
           <div id="solo-menu-panel" class="menu-panel menu-panel--primary">
-            <p class="menu-panel-copy">Stay ahead of traffic. Distance is your score.</p>
+            <p class="menu-panel-copy">Drive as far as you can.</p>
             <div class="menu-actions">
-              <button id="menu-play-button" type="button">Start Run</button>
-              <button id="menu-new-run-button" type="button" class="ghost-button is-hidden">Fresh Run</button>
+              <button id="menu-play-button" type="button">Drive</button>
+              <button id="menu-new-run-button" type="button" class="ghost-button is-hidden">New Run</button>
             </div>
           </div>
 
           <section id="multiplayer-menu-panel" class="multiplayer-panel menu-panel is-hidden" aria-labelledby="multiplayer-heading">
             <div class="multiplayer-panel__head">
               <div>
-                <span class="hud-kicker">Private Race</span>
-                <h3 id="multiplayer-heading">Lobby Race</h3>
+                <span class="hud-kicker">Online</span>
+                <h3 id="multiplayer-heading">Rolling Race</h3>
               </div>
               <p id="multiplayer-status" class="menu-status menu-status--left">
-                Multiplayer requires the Node server.
+                Online mode unavailable.
               </p>
             </div>
 
             <label class="menu-field" for="lobby-code-input">
-              <span class="hud-label">Lobby Code</span>
+              <span class="hud-label">Join Code</span>
               <input id="lobby-code-input" type="text" maxlength="6" placeholder="ABC123" autocomplete="off" />
             </label>
 
             <div class="menu-actions">
-              <button id="multiplayer-create-button" type="button">Create Lobby</button>
-              <button id="multiplayer-join-button" type="button" class="ghost-button">Join Lobby</button>
+              <button id="multiplayer-create-button" type="button">Host Race</button>
+              <button id="multiplayer-join-button" type="button" class="ghost-button">Join Code</button>
+            </div>
+
+            <div class="multiplayer-browse">
+              <div class="multiplayer-browse__head">
+                <span class="hud-label">Open Lobbies</span>
+                <button id="multiplayer-refresh-button" type="button" class="ghost-button">Refresh</button>
+              </div>
+              <ul id="multiplayer-waiting-list" class="multiplayer-waiting-list">
+                <li class="multiplayer-waiting-empty">No open races right now.</li>
+              </ul>
             </div>
 
             <div id="multiplayer-lobby-card" class="multiplayer-lobby is-hidden">
@@ -129,7 +130,7 @@
                   <span class="hud-label">Current Lobby</span>
                   <strong id="multiplayer-lobby-code">------</strong>
                 </div>
-                <span class="multiplayer-lobby__hint">10 km traffic race</span>
+                <span class="multiplayer-lobby__hint">6 km rolling start</span>
               </div>
               <ul id="multiplayer-player-list" class="multiplayer-player-list"></ul>
               <div class="menu-actions">
@@ -162,9 +163,19 @@
               </select>
             </label>
 
-            <p id="graphics-preset-status" class="menu-copy menu-copy--compact">
-              Balanced is the default preset.
-            </p>
+              <p id="graphics-preset-status" class="menu-copy menu-copy--compact">
+                Balanced is the default preset.
+              </p>
+
+              <div class="menu-field menu-field--stack">
+                <div class="secret-panel__header">
+                  <span class="hud-label">Display</span>
+                  <button id="fullscreen-toggle" type="button" class="ghost-button">Fullscreen: Off</button>
+                </div>
+                <p class="menu-copy menu-copy--compact">
+                  Expand the game to the full screen on supported devices.
+                </p>
+              </div>
 
             <div class="menu-field menu-field--stack">
               <div class="secret-panel__header">
@@ -180,15 +191,15 @@
               </p>
             </div>
 
-            <div class="menu-field menu-field--stack">
-              <div class="secret-panel__header">
-                <span class="hud-label">Vibration</span>
-                <button id="vibration-toggle-button" type="button" class="ghost-button">Vibration: On</button>
+              <div class="menu-field menu-field--stack">
+                <div class="secret-panel__header">
+                  <span class="hud-label">Vibration</span>
+                  <button id="vibration-toggle-button" type="button" class="ghost-button">Vibration: On</button>
+                </div>
+                <p class="menu-copy menu-copy--compact">
+                  Police and NOS feedback on supported devices.
+                </p>
               </div>
-              <p class="menu-copy menu-copy--compact">
-                Pulses for police pressure and NOS on supported devices.
-              </p>
-            </div>
 
             <div class="menu-field menu-field--stack">
               <span class="hud-label">Tracking</span>

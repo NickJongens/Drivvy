@@ -31,6 +31,8 @@ const LEGACY_AUTOPILOT_STORAGE_KEY = "polySprint.autopilot";
 const LEGACY_PLAYER_NAME_STORAGE_KEY = "polySprint.playerName";
 const LEGACY_SECRET_STORAGE_KEY = "polySprint.secretMenu";
 const MULTIPLAYER_SEND_INTERVAL = 0.1;
+const MULTIPLAYER_TARGET_DISTANCE = 6000;
+const MULTIPLAYER_ROLLING_SPEED = 15;
 const GRAPHICS_PRESETS = {
   low: {
     label: "Low",
@@ -135,6 +137,7 @@ export class Game {
     });
     this.highContrastEnabled = readStoredValue(HIGH_CONTRAST_STORAGE_KEY, "0") === "1";
     this.colorAssistEnabled = readStoredValue(COLOR_ASSIST_STORAGE_KEY, "0") === "1";
+    this.accessibilityExposureBias = 0;
     this.accessibilityPromptSeen = readStoredValue(ACCESSIBILITY_PROMPT_SEEN_STORAGE_KEY, "0") === "1";
     this.graphicsPreset = normalizeGraphicsPreset(readStoredValue(GRAPHICS_PRESET_STORAGE_KEY, "medium"));
     this.graphics = GRAPHICS_PRESETS[this.graphicsPreset];
@@ -195,6 +198,8 @@ export class Game {
     this.scene.add(this.player.mesh);
     this.crashEffect = this.createCrashEffect();
     this.player.mesh.add(this.crashEffect.group);
+    this.multiplayerRaceMarkers = this.createMultiplayerRaceMarkers();
+    this.scene.add(this.multiplayerRaceMarkers.group);
 
     this.clock = new THREE.Clock();
     this.cameraLookAt = new THREE.Vector3();
@@ -207,6 +212,8 @@ export class Game {
     this.tempQuaternion = new THREE.Quaternion();
     this.anchorWorldA = new THREE.Vector3();
     this.anchorWorldB = new THREE.Vector3();
+    this.surfaceUp = new THREE.Vector3();
+    this.lookSurfaceUp = new THREE.Vector3();
     this.playerSample = this.track.sample(0, 0);
     this.laneState = this.track.getLaneState(0, 0, this.player.route);
     this.weather = this.weatherSystem.getCurrent();
@@ -239,16 +246,19 @@ export class Game {
         startAt: 0,
         targetDistance: 0,
         trackSeed: 0,
+        startGrid: [],
         finished: false,
         finishTime: null,
         results: null,
+        countdownCleared: false,
       },
       remotePlayers: new Map(),
       sendAccumulator: 0,
       position: 1,
       playerCount: 1,
       lastRaceState: null,
-      status: "Multiplayer requires the Node server.",
+      waitingLobbies: [],
+      status: "Online mode unavailable.",
     };
 
     this.handleResize = this.handleResize.bind(this);
@@ -289,6 +299,12 @@ export class Game {
     this.hud.setMultiplayerJoinHandler(() => {
       void this.handleMultiplayerJoinLobby();
     });
+    this.hud.setMultiplayerRefreshHandler(() => {
+      void this.requestWaitingLobbies();
+    });
+    this.hud.setWaitingLobbyJoinHandler((code) => {
+      void this.handleMultiplayerJoinLobby(code);
+    });
     this.hud.setMultiplayerReadyHandler(() => {
       void this.handleMultiplayerToggleReady();
     });
@@ -305,6 +321,9 @@ export class Game {
     };
     this.multiplayerClient.onLobbyState = (message) => {
       this.handleMultiplayerLobbyState(message);
+    };
+    this.multiplayerClient.onWaitingLobbies = (message) => {
+      this.handleMultiplayerWaitingLobbies(message);
     };
     this.multiplayerClient.onRaceStarted = (message) => {
       this.handleMultiplayerRaceStarted(message);
@@ -416,8 +435,29 @@ export class Game {
   ) {
     this.highContrastEnabled = Boolean(highContrast);
     this.colorAssistEnabled = Boolean(colorAssist);
+    this.accessibilityExposureBias = this.highContrastEnabled ? 0.18 : this.colorAssistEnabled ? 0.08 : 0;
     document.body.classList.toggle("theme-high-contrast", this.highContrastEnabled);
     document.body.classList.toggle("theme-color-assist", this.colorAssistEnabled);
+    this.renderer.domElement.style.filter =
+      this.highContrastEnabled && this.colorAssistEnabled
+        ? "contrast(1.18) saturate(1.12) brightness(1.05)"
+        : this.highContrastEnabled
+          ? "contrast(1.16) brightness(1.05)"
+          : this.colorAssistEnabled
+            ? "saturate(1.15) contrast(1.04)"
+            : "";
+    this.track.setAccessibility({
+      highContrast: this.highContrastEnabled,
+      colorAssist: this.colorAssistEnabled,
+    });
+    this.weatherSystem.setAccessibility({
+      highContrast: this.highContrastEnabled,
+      colorAssist: this.colorAssistEnabled,
+    });
+    this.collectibleSystem.setAccessibility({
+      highContrast: this.highContrastEnabled,
+      colorAssist: this.colorAssistEnabled,
+    });
     this.hud.setAccessibilitySettings({
       highContrast: this.highContrastEnabled,
       colorAssist: this.colorAssistEnabled,
@@ -598,7 +638,7 @@ export class Game {
     this.crashDistance = 0;
     this.multiplayerTrafficPenaltyTime = 0;
     this.input.resetState();
-    this.player.nosCharge = 12;
+    this.player.nosCharge = multiplayer ? 48 : 12;
     this.player.coins = 0;
     this.player.boostActive = false;
     this.pursuitState = { active: false, activeCount: 0, nearestGap: null };
@@ -620,6 +660,7 @@ export class Game {
     this.snapCameraToCurrentView();
     this.hud.hideCrash();
     this.hud.setScoreStatus("Score will save on impact once high scores are ready.");
+    this.updateMultiplayerRaceMarkers();
     this.clock.getDelta();
   }
 
@@ -681,21 +722,14 @@ export class Game {
       mode: this.multiplayer.mode,
     });
     this.syncTrackingConsentUi();
+
+    if (this.multiplayer.mode === "multiplayer") {
+      void this.requestWaitingLobbies();
+    }
   }
 
   toggleMenu() {
-    if (this.isMultiplayerRaceActive()) {
-      return;
-    }
-
-    if (this.state === "running") {
-      this.openMenu({ canResume: true });
-      return;
-    }
-
-    if (this.state === "menu" && this.menuCanResume) {
-      this.resumeRun();
-    }
+    this.handleMenuToggleRequest();
   }
 
   handleMenuPlay() {
@@ -733,6 +767,7 @@ export class Game {
     if (nextMode === "multiplayer") {
       this.setAiEnabled(false);
       this.hud.setMultiplayerStatus(this.multiplayer.status);
+      void this.requestWaitingLobbies();
       return;
     }
 
@@ -744,6 +779,34 @@ export class Game {
     this.resetMultiplayerRaceState();
     this.clearRemotePlayers();
     this.hud.clearLobbyState();
+  }
+
+  handleMenuToggleRequest() {
+    if (this.isMultiplayerRaceActive() || this.hud.isAccessibilityPromptVisible?.()) {
+      return;
+    }
+
+    if (this.state === "running") {
+      this.openMenu({ canResume: true });
+      return;
+    }
+
+    if (this.state === "menu" && this.menuCanResume) {
+      this.resumeRun();
+      return;
+    }
+
+    if (this.state === "crashed") {
+      this.openMenu({ canResume: false });
+    }
+  }
+
+  async requestWaitingLobbies() {
+    try {
+      await this.multiplayerClient.requestWaitingLobbies();
+    } catch (error) {
+      this.hud.setMultiplayerStatus(error.message);
+    }
   }
 
   handleResize() {
@@ -762,17 +825,7 @@ export class Game {
 
     if (event.key === "Escape") {
       event.preventDefault();
-      if (this.isMultiplayerRaceActive()) {
-        return;
-      }
-
-      if (this.state === "running") {
-        this.openMenu({ canResume: true });
-      } else if (this.state === "menu" && this.menuCanResume) {
-        this.resumeRun();
-      } else if (this.state === "crashed") {
-        this.openMenu({ canResume: false });
-      }
+      this.handleMenuToggleRequest();
       return;
     }
 
@@ -831,6 +884,9 @@ export class Game {
   update(delta) {
     const previousPlayerS = this.player.s;
     this.input.update();
+    if (this.input.consumeMenuPress()) {
+      this.handleMenuToggleRequest();
+    }
     this.routeTransitionTime = Math.max(0, this.routeTransitionTime - delta);
 
     if (this.state === "running") {
@@ -872,7 +928,7 @@ export class Game {
     const nightLevel = this.weather.nightLevel || 0;
     this.renderer.toneMappingExposure = THREE.MathUtils.damp(
       this.renderer.toneMappingExposure,
-      1.12 - nightLevel * 0.24,
+      1.12 - nightLevel * 0.24 + this.accessibilityExposureBias,
       3.8,
       delta
     );
@@ -895,6 +951,7 @@ export class Game {
       race: this.getRaceLabel(),
       assist: this.aiEnabled ? "Drive Assist" : "Manual",
     });
+    this.updateMultiplayerRaceMarkers();
   }
 
   updateFeedback(delta, previousPlayerS) {
@@ -963,14 +1020,18 @@ export class Game {
   }
 
   updateMultiplayer(delta) {
-      this.weather = { ...MULTIPLAYER_CLEAR_WEATHER };
-      const countdownSeconds = Math.max(0, (this.multiplayer.race.startAt - Date.now()) / 1000);
+    this.weather = { ...MULTIPLAYER_CLEAR_WEATHER };
+    const countdownSeconds = Math.max(0, (this.multiplayer.race.startAt - Date.now()) / 1000);
 
     if (countdownSeconds <= 0) {
+      if (!this.multiplayer.race.countdownCleared) {
+        this.multiplayer.race.countdownCleared = true;
+        this.player.speed = Math.max(this.player.speed, MULTIPLAYER_ROLLING_SPEED);
+        this.hud.setMultiplayerStatus("Go.");
+      }
       this.updatePlayer(delta, this.weather);
     } else {
-      this.player.speed = THREE.MathUtils.damp(this.player.speed, 0, 7.5, delta);
-      this.player.lateralVelocity = THREE.MathUtils.damp(this.player.lateralVelocity, 0, 10, delta);
+      this.updateMultiplayerRollingStart(delta);
       this.player.mesh.userData.setBoostActive?.(false, 0);
     }
 
@@ -1006,6 +1067,21 @@ export class Game {
     }
   }
 
+  updateMultiplayerRollingStart(delta) {
+    const startSlot = this.getMultiplayerStartSlot(this.multiplayerClient.clientId);
+    if (startSlot) {
+      this.player.targetLaneOffset = startSlot.laneOffset;
+    }
+
+    const laneError = this.player.targetLaneOffset - this.player.laneOffset;
+    this.player.lateralVelocity = THREE.MathUtils.damp(this.player.lateralVelocity, laneError * 2.8, 6.5, delta);
+    this.player.laneOffset += this.player.lateralVelocity * delta;
+    this.player.speed = THREE.MathUtils.damp(this.player.speed, MULTIPLAYER_ROLLING_SPEED, 4.5, delta);
+    this.player.s += this.player.speed * delta;
+    this.player.steerVisual = THREE.MathUtils.damp(this.player.steerVisual, laneError * 0.1, 6, delta);
+    this.player.boostActive = false;
+  }
+
   updatePlayer(delta, weather) {
     const bounds = this.track.getDrivingBounds(this.player.s, this.player.route);
     const laneTargets = this.track.getLaneTargets(this.player.s, this.player.route);
@@ -1035,6 +1111,9 @@ export class Game {
     const boostRatio = boostDrain / Math.max(delta * 30, 0.0001);
     this.player.nosCharge = Math.max(0, this.player.nosCharge - boostDrain);
     this.player.boostActive = boostRatio > 0.05;
+    if (this.multiplayer.mode === "multiplayer" && !this.player.boostActive) {
+      this.player.nosCharge = Math.min(72, this.player.nosCharge + delta * 8);
+    }
     const surfaceEffect = this.track.getSurfaceEffect(this.player.s, this.player.laneOffset, weather, this.player.route);
     const grip = Math.max(0.24, weather.grip * (surfaceEffect.grip || 1));
     const steeringRange = Math.max(bounds.left, Math.abs(bounds.right), 0.001);
@@ -1354,6 +1433,7 @@ export class Game {
     this.cameraForward.set(0, 0, 1).applyQuaternion(this.tempQuaternion).normalize();
     this.cameraRight.set(1, 0, 0).applyQuaternion(this.tempQuaternion).normalize();
     this.cameraUp.set(0, 1, 0).applyQuaternion(this.tempQuaternion).normalize();
+    this.camera.up.set(0, 1, 0);
     const speedFactor = THREE.MathUtils.clamp(this.player.speed / Math.max(this.player.baseMaxSpeed, 0.001), 0, 1);
     const lookingBack = this.lookBehindActive;
     const fpv = this.viewMode === "fpv";
@@ -1380,36 +1460,54 @@ export class Game {
       return { fpv: false, routeBoost, targetFov };
     }
 
-    if (fpv) {
-      const headBob = Math.sin(performance.now() * 0.007 + this.player.speed * 0.08) * (0.01 + speedFactor * 0.035);
-      const shoulderLean = this.player.steerVisual * 0.08;
-      const cameraAnchors = this.player.mesh.userData.cameraAnchors;
-      const laneLookSample = this.track.sample(this.player.s + (lookingBack ? -28 : 40), this.player.laneOffset, this.player.route);
-      const cockpitAnchor =
-        cameraAnchors?.cockpit?.getWorldPosition(this.anchorWorldA) ??
-        this.anchorWorldA
-          .copy(this.playerSample.position)
-          .addScaledVector(this.cameraForward, 0.54)
-          .addScaledVector(this.cameraUp, 1.74);
-      const lookAnchor =
-        (lookingBack ? cameraAnchors?.rearLook : cameraAnchors?.lookAhead)?.getWorldPosition(this.anchorWorldB) ??
-        this.anchorWorldB
-          .copy(this.playerSample.position)
-          .addScaledVector(this.cameraForward, lookingBack ? -18 : 24)
-          .addScaledVector(this.cameraUp, 1.56);
+    if (this.isMultiplayerRaceCountdownActive()) {
+      const countdownFactor = THREE.MathUtils.clamp(
+        1 - (this.multiplayer.race.startAt - Date.now()) / 5000,
+        0,
+        1
+      );
       this.cameraTarget
-        .copy(cockpitAnchor)
-        .addScaledVector(this.cameraRight, shoulderLean)
-        .addScaledVector(this.cameraUp, headBob);
+        .copy(this.playerSample.position)
+        .addScaledVector(this.cameraForward, -(23 - countdownFactor * 4))
+        .addScaledVector(this.cameraRight, 9 - countdownFactor * 4.5)
+        .addScaledVector(this.cameraUp, 7 - countdownFactor * 0.8);
 
       this.lookTarget
-        .copy(laneLookSample.position)
-        .addScaledVector(laneLookSample.right, this.player.steerVisual * (lookingBack ? -0.2 : 0.24))
-        .addScaledVector(this.cameraUp, 1.46 + headBob * 0.5);
+        .copy(this.playerSample.position)
+        .addScaledVector(this.cameraForward, 26)
+        .addScaledVector(this.cameraRight, -1.2)
+        .addScaledVector(this.cameraUp, 2.6);
 
-      if (lookingBack) {
-        this.lookTarget.lerp(lookAnchor, 0.2);
-      }
+      targetFov = 66 - countdownFactor * 2;
+      return { fpv: false, routeBoost: 1.25, targetFov };
+    }
+
+    if (fpv) {
+      const headBob = Math.sin(performance.now() * 0.007 + this.player.speed * 0.08) * (0.01 + speedFactor * 0.035);
+      const laneLookSample = this.track.sample(
+        this.player.s + (lookingBack ? -28 : 40),
+        this.player.laneOffset,
+        this.player.route
+      );
+      this.surfaceUp.crossVectors(this.playerSample.tangent, this.playerSample.right).normalize();
+      this.lookSurfaceUp.crossVectors(laneLookSample.tangent, laneLookSample.right).normalize();
+      this.camera.up.copy(this.surfaceUp);
+
+      const cockpitAnchor = this.anchorWorldA
+        .copy(this.playerSample.position)
+        .addScaledVector(this.playerSample.tangent, 0.42)
+        .addScaledVector(this.surfaceUp, 1.6);
+      const lookAnchor = this.anchorWorldB
+        .copy(laneLookSample.position)
+        .addScaledVector(this.lookSurfaceUp, 1.44);
+      this.cameraTarget
+        .copy(cockpitAnchor)
+        .addScaledVector(this.surfaceUp, headBob);
+
+      this.lookTarget
+        .copy(lookAnchor)
+        .addScaledVector(laneLookSample.right, this.player.steerVisual * (lookingBack ? -0.2 : 0.24))
+        .addScaledVector(this.lookSurfaceUp, headBob * 0.35);
 
       targetFov = 76.5 + speedFactor * 2.4 + (this.player.boostActive ? 2.8 : 0);
       return { fpv, routeBoost, targetFov };
@@ -1455,6 +1553,96 @@ export class Game {
     this.camera.fov = targetFov;
     this.camera.updateProjectionMatrix();
     this.camera.lookAt(this.cameraLookAt);
+  }
+
+  createMultiplayerRaceMarkers() {
+    const group = new THREE.Group();
+    group.visible = false;
+
+    const startLine = this.createRaceMarker();
+    const finishLine = this.createRaceMarker();
+    group.add(startLine, finishLine);
+
+    return {
+      group,
+      startLine,
+      finishLine,
+    };
+  }
+
+  createRaceMarker() {
+    const group = new THREE.Group();
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(LANE_WIDTH * 3.6, 3.8),
+      this.getRaceMarkerMaterial()
+    );
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = 0.05;
+    group.add(mesh);
+    return group;
+  }
+
+  getRaceMarkerMaterial() {
+    if (this.raceMarkerMaterial) {
+      return this.raceMarkerMaterial;
+    }
+
+    if (typeof document === "undefined") {
+      this.raceMarkerMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      return this.raceMarkerMaterial;
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 48;
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      this.raceMarkerMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      return this.raceMarkerMaterial;
+    }
+
+    const cellSize = 16;
+    for (let row = 0; row < canvas.height / cellSize; row += 1) {
+      for (let column = 0; column < canvas.width / cellSize; column += 1) {
+        context.fillStyle = (row + column) % 2 === 0 ? "#faf7ef" : "#111418";
+        context.fillRect(column * cellSize, row * cellSize, cellSize, cellSize);
+      }
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(3.4, 1);
+    this.raceMarkerMaterial = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      opacity: 0.95,
+    });
+    return this.raceMarkerMaterial;
+  }
+
+  updateMultiplayerRaceMarkers() {
+    if (!this.multiplayerRaceMarkers) {
+      return;
+    }
+
+    const markersVisible = this.isMultiplayerRaceActive() && this.multiplayer.race.targetDistance > 0;
+    this.multiplayerRaceMarkers.group.visible = markersVisible;
+    if (!markersVisible) {
+      return;
+    }
+
+    this.track.placeAlongTrack(this.multiplayerRaceMarkers.startLine, 0, 0, 0.03, 0, "main");
+    this.track.placeAlongTrack(
+      this.multiplayerRaceMarkers.finishLine,
+      this.multiplayer.race.targetDistance,
+      0,
+      0.03,
+      0,
+      "main"
+    );
   }
 
   createSkyAccent() {
@@ -1725,8 +1913,8 @@ export class Game {
       this.hud.renderLeaderboard(leaderboard.entries);
       this.hud.setMenuStatus(
         leaderboard.storage === "server"
-          ? "High scores ready. Runs are stored in data/highscores.json."
-          : "High scores loaded from this browser cache."
+          ? "High scores ready."
+          : "High scores loaded."
       );
     } catch (error) {
       this.hud.renderLeaderboard([]);
@@ -2022,25 +2210,29 @@ export class Game {
     if (this.isMultiplayerRaceActive()) {
       const countdown = Math.max(0, (this.multiplayer.race.startAt - Date.now()) / 1000);
       if (countdown > 0.05) {
-        return `Start ${countdown.toFixed(1)}s`;
+        return `Rolling start ${Math.ceil(countdown)}`;
       }
 
       if (this.multiplayer.race.finished) {
-        return "Finished";
+        return "Race finished";
       }
 
-      return `P${this.multiplayer.position}/${this.multiplayer.playerCount}`;
+      return `Position ${this.multiplayer.position}/${this.multiplayer.playerCount}`;
     }
 
     if (this.multiplayer.mode === "multiplayer" && this.multiplayer.lobby) {
-      return "Lobby";
+      return "Online lobby";
     }
 
-    return "Solo";
+    return "Single player";
   }
 
   isMultiplayerRaceActive() {
     return this.multiplayer.mode === "multiplayer" && this.multiplayer.race.active;
+  }
+
+  isMultiplayerRaceCountdownActive() {
+    return this.isMultiplayerRaceActive() && Date.now() < this.multiplayer.race.startAt;
   }
 
   resetMultiplayerRaceState() {
@@ -2049,13 +2241,16 @@ export class Game {
       startAt: 0,
       targetDistance: 0,
       trackSeed: 0,
+      startGrid: [],
       finished: false,
       finishTime: null,
       results: null,
+      countdownCleared: false,
     };
     this.multiplayer.sendAccumulator = 0;
     this.multiplayer.position = 1;
     this.multiplayer.playerCount = 1;
+    this.updateMultiplayerRaceMarkers();
   }
 
   clearRemotePlayers() {
@@ -2063,6 +2258,10 @@ export class Game {
       this.scene.remove(remote.mesh);
     }
     this.multiplayer.remotePlayers.clear();
+  }
+
+  getMultiplayerStartSlot(playerId) {
+    return this.multiplayer.race.startGrid.find((slot) => slot.id === playerId) || null;
   }
 
   updateRemotePlayers(delta) {
@@ -2100,13 +2299,14 @@ export class Game {
 
     try {
       await this.multiplayerClient.createLobby(this.capturePlayerName());
+      await this.requestWaitingLobbies();
     } catch (error) {
       this.hud.setMultiplayerStatus(error.message);
     }
   }
 
-  async handleMultiplayerJoinLobby() {
-    const lobbyCode = this.hud.getLobbyCode();
+  async handleMultiplayerJoinLobby(joinCode = "") {
+    const lobbyCode = String(joinCode || this.hud.getLobbyCode()).trim().toUpperCase();
     if (lobbyCode.length < 4) {
       this.hud.setMultiplayerStatus("Enter a lobby code first.");
       return;
@@ -2118,6 +2318,7 @@ export class Game {
 
     try {
       await this.multiplayerClient.joinLobby(this.capturePlayerName(), lobbyCode);
+      this.hud.setLobbyCode(lobbyCode);
     } catch (error) {
       this.hud.setMultiplayerStatus(error.message);
     }
@@ -2150,6 +2351,7 @@ export class Game {
       this.clearRemotePlayers();
       this.hud.clearLobbyState();
       this.hud.setMultiplayerStatus("Lobby left.");
+      void this.requestWaitingLobbies();
       if (this.state === "running") {
         this.state = "menu";
         this.openMenu({ canResume: false });
@@ -2160,6 +2362,14 @@ export class Game {
   }
 
   handleMultiplayerLobbyState(message) {
+    if (this.multiplayer.race.active && message.raceStatus !== "running" && !this.multiplayer.race.finished) {
+      this.multiplayer.race.active = false;
+      this.menuCanResume = false;
+      this.state = "menu";
+      this.openMenu({ canResume: false });
+      this.hud.setMultiplayerStatus("Race ended. Back in lobby.");
+    }
+
     this.multiplayer.lobby = message.lobbyCode ? message : null;
     this.hud.renderLobbyState({
       ...message,
@@ -2167,7 +2377,7 @@ export class Game {
     });
 
     if (!message.lobbyCode) {
-      this.hud.setMultiplayerStatus("Create or join a lobby.");
+      this.hud.setMultiplayerStatus("Host a race or join one below.");
       return;
     }
 
@@ -2178,11 +2388,17 @@ export class Game {
     }
 
     if (message.canStart) {
-      this.hud.setMultiplayerStatus(`Lobby ${message.lobbyCode} is open. Host can start at any time.`);
+      this.hud.setMultiplayerStatus(`Lobby ${message.lobbyCode} is ready. Host can start any time.`);
       return;
     }
 
-    this.hud.setMultiplayerStatus(`Lobby ${message.lobbyCode} has ${playerCount} driver${playerCount === 1 ? "" : "s"}.`);
+    this.hud.setMultiplayerStatus(`Lobby ${message.lobbyCode}. Waiting for more drivers.`);
+  }
+
+  handleMultiplayerWaitingLobbies(message) {
+    const lobbies = Array.isArray(message.lobbies) ? message.lobbies : [];
+    this.multiplayer.waitingLobbies = lobbies.filter((lobby) => lobby.code !== this.multiplayer.lobby?.lobbyCode);
+    this.hud.renderWaitingLobbies(this.multiplayer.waitingLobbies);
   }
 
   handleMultiplayerRaceStarted(message) {
@@ -2190,14 +2406,31 @@ export class Game {
     this.resetMultiplayerRaceState();
     this.multiplayer.race.active = true;
     this.multiplayer.race.startAt = Number(message.startAt) || Date.now();
-    this.multiplayer.race.targetDistance = Number(message.targetDistance) || 10000;
+    this.multiplayer.race.targetDistance = Number(message.targetDistance) || MULTIPLAYER_TARGET_DISTANCE;
     this.multiplayer.race.trackSeed = Number(message.trackSeed) || 1;
+    this.multiplayer.race.startGrid = Array.isArray(message.startGrid) ? message.startGrid : [];
+    this.multiplayer.race.countdownCleared = false;
     this.multiplayer.lastRaceState = null;
 
     this.resetRun({
       seed: this.multiplayer.race.trackSeed,
       multiplayer: true,
     });
+    const startSlot = this.getMultiplayerStartSlot(this.multiplayerClient.clientId);
+    if (startSlot) {
+      this.player.s = Number(startSlot.s) || 0;
+      this.player.laneOffset = Number(startSlot.laneOffset) || 0;
+      this.player.targetLaneOffset = this.player.laneOffset;
+      this.playerSample = this.track.placeAlongTrack(
+        this.player.mesh,
+        this.player.s,
+        this.player.laneOffset,
+        1.05,
+        0,
+        this.player.route
+      );
+    }
+    this.setViewMode("chase", { snap: true, resetLookBehind: true });
     this.hasRunStarted = true;
     this.controlsHintTime = CONTROLS_HINT_DURATION;
     this.hud.setControlsVisible(true);
@@ -2205,7 +2438,7 @@ export class Game {
     this.state = "running";
     this.hud.hideMenu();
     this.hud.hideTrackingConsent();
-    this.hud.setMultiplayerStatus("10 km race countdown started.");
+    this.hud.setMultiplayerStatus("6 km race. Rolling start.");
     this.recordRunTelemetry("multiplayer", this.multiplayer.race.trackSeed);
     this.clock.getDelta();
   }
@@ -2260,7 +2493,7 @@ export class Game {
       ? `Finished P${placement.place}/${this.multiplayer.race.results.length}.`
       : "Race finished.";
 
-    this.hud.setMultiplayerStatus(`${resultLabel} Ready up for another race.`);
+    this.hud.setMultiplayerStatus(`${resultLabel} Back in lobby.`);
     this.menuCanResume = false;
     this.state = "menu";
     this.input.resetState();

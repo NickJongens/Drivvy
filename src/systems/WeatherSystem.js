@@ -102,6 +102,8 @@ const WEATHER_PRESETS = [
 export class WeatherSystem {
   constructor(scene) {
     this.scene = scene;
+    this.highContrast = false;
+    this.colorAssist = false;
     this.transitionDuration = 6;
     this.holdDuration = 20;
     this.sequence = [0, 1, 2, 1, 3, 1, 4, 1, 5, 1, 0];
@@ -126,6 +128,11 @@ export class WeatherSystem {
     this.scene.add(this.particles);
 
     this.reset();
+  }
+
+  setAccessibility({ highContrast = false, colorAssist = false } = {}) {
+    this.highContrast = Boolean(highContrast);
+    this.colorAssist = Boolean(colorAssist);
   }
 
   setQuality({ particleBudget = this.maxParticles } = {}) {
@@ -186,16 +193,27 @@ export class WeatherSystem {
       return;
     }
 
-    this.scene.background.set(weather.skyColor);
-
-    if (!this.scene.fog) {
-      this.scene.fog = new THREE.FogExp2(weather.fogColor, weather.fogDensity);
+    const adjustedFogDensity = this.highContrast ? weather.fogDensity * 0.55 : weather.fogDensity;
+    const backgroundColor = new THREE.Color(weather.skyColor);
+    const fogColor = new THREE.Color(weather.fogColor);
+    if (this.highContrast) {
+      backgroundColor.lerp(new THREE.Color(0xf3f8ff), 0.16);
+      fogColor.lerp(new THREE.Color(0xffffff), 0.12);
+    }
+    if (this.colorAssist) {
+      backgroundColor.offsetHSL(0.02, 0.08, 0.02);
     }
 
-    this.scene.fog.color.set(weather.fogColor);
-    this.scene.fog.density = weather.fogDensity;
-    skyLight.intensity = weather.ambient;
-    sunLight.intensity = weather.sunlight;
+    this.scene.background.copy(backgroundColor);
+
+    if (!this.scene.fog) {
+      this.scene.fog = new THREE.FogExp2(fogColor.getHex(), adjustedFogDensity);
+    }
+
+    this.scene.fog.color.copy(fogColor);
+    this.scene.fog.density = adjustedFogDensity;
+    skyLight.intensity = this.highContrast ? weather.ambient + 0.18 : weather.ambient;
+    sunLight.intensity = this.highContrast ? weather.sunlight + 0.12 : weather.sunlight;
     const nightLevel = weather.nightLevel || 0;
     skyLight.color.copy(new THREE.Color(0xd9efff).lerp(new THREE.Color(0x90a8d6), nightLevel));
     skyLight.groundColor.copy(new THREE.Color(0x304534).lerp(new THREE.Color(0x111820), nightLevel));
@@ -213,9 +231,21 @@ export class WeatherSystem {
 
     this.particles.visible = true;
     this.particleMaterial.size = particleType === "rain" ? 0.18 : particleType === "snow" ? 0.28 : 0.38;
-    this.particleMaterial.opacity = particleType === "mist" ? 0.26 : 0.86;
+    this.particleMaterial.opacity = this.highContrast
+      ? particleType === "mist" ? 0.14 : 0.68
+      : particleType === "mist" ? 0.26 : 0.86;
     this.particleMaterial.color.set(
-      particleType === "rain" ? 0xbadfff : particleType === "snow" ? 0xffffff : 0xe7ecef
+      this.colorAssist
+        ? particleType === "rain"
+          ? 0x74f0ff
+          : particleType === "snow"
+            ? 0xffffff
+            : 0xfafad2
+        : particleType === "rain"
+          ? 0xbadfff
+          : particleType === "snow"
+            ? 0xffffff
+            : 0xe7ecef
     );
 
     const forward = anchorSample.tangent;

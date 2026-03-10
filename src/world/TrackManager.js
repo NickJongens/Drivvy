@@ -167,6 +167,7 @@ export class TrackManager {
     this.randomState = 1;
     this.qualityPreset = normalizeTrackQualityPreset(qualityPreset);
     this.quality = TRACK_QUALITY_PRESETS[this.qualityPreset];
+    this.setAccessibility();
 
     this.setSeed((Date.now() ^ 0xa341316c) >>> 0);
     this.reset();
@@ -175,6 +176,118 @@ export class TrackManager {
   setQualityPreset(preset) {
     this.qualityPreset = normalizeTrackQualityPreset(preset);
     this.quality = TRACK_QUALITY_PRESETS[this.qualityPreset];
+  }
+
+  setAccessibility({ highContrast = false, colorAssist = false } = {}) {
+    if (highContrast && colorAssist) {
+      this.roadMaterial.color.set(0x111317);
+      this.terrainMaterial.color.set(0x223328);
+      this.lineMaterial.color.set(0xffffff);
+      this.lineMaterial.emissive.set(0xf0f0b5);
+      this.edgeLineMaterial.color.set(0xffffff);
+      this.edgeLineMaterial.emissive.set(0xfff59a);
+      this.edgeLineMaterial.emissiveIntensity = 0.8;
+      this.waterMaterial.color.set(0x1bdcff);
+      this.waterMaterial.emissive.set(0x0f88a7);
+      this.waterMaterial.emissiveIntensity = 0.44;
+      this.iceMaterial.color.set(0xf2f8ff);
+      this.iceMaterial.emissive.set(0xb7e8ff);
+      this.iceMaterial.emissiveIntensity = 0.36;
+      this.windowMaterial.color.set(0xc1f4ff);
+      this.windowMaterial.emissive.set(0x46d8ff);
+      this.windowMaterial.emissiveIntensity = 0.4;
+    } else if (highContrast) {
+      this.roadMaterial.color.set(0x16191d);
+      this.terrainMaterial.color.set(0x31443a);
+      this.lineMaterial.color.set(0xfff9d4);
+      this.lineMaterial.emissive.set(0x8f8642);
+      this.edgeLineMaterial.color.set(0xffffff);
+      this.edgeLineMaterial.emissive.set(0xb9aa44);
+      this.edgeLineMaterial.emissiveIntensity = 0.62;
+      this.waterMaterial.color.set(0x8dcce0);
+      this.waterMaterial.emissive.set(0x366377);
+      this.waterMaterial.emissiveIntensity = 0.26;
+      this.iceMaterial.color.set(0xaab7c4);
+      this.iceMaterial.emissive.set(0x394550);
+      this.iceMaterial.emissiveIntensity = 0.16;
+      this.windowMaterial.color.set(0xa0bfd2);
+      this.windowMaterial.emissive.set(0x2d4759);
+      this.windowMaterial.emissiveIntensity = 0.24;
+    } else if (colorAssist) {
+      this.roadMaterial.color.set(0x252a30);
+      this.terrainMaterial.color.set(0x52693f);
+      this.lineMaterial.color.set(0xfff3b2);
+      this.lineMaterial.emissive.set(0x7e7428);
+      this.edgeLineMaterial.color.set(0xfff9d9);
+      this.edgeLineMaterial.emissive.set(0xa29022);
+      this.edgeLineMaterial.emissiveIntensity = 0.42;
+      this.waterMaterial.color.set(0x47d7ed);
+      this.waterMaterial.emissive.set(0x137487);
+      this.waterMaterial.emissiveIntensity = 0.28;
+      this.iceMaterial.color.set(0x31424d);
+      this.iceMaterial.emissive.set(0x235768);
+      this.iceMaterial.emissiveIntensity = 0.12;
+      this.windowMaterial.color.set(0x74d9eb);
+      this.windowMaterial.emissive.set(0x1385a6);
+      this.windowMaterial.emissiveIntensity = 0.28;
+    } else {
+      this.roadMaterial.color.set(0x2b2d31);
+      this.terrainMaterial.color.set(0x5f794c);
+      this.lineMaterial.color.set(0xf6e8b1);
+      this.lineMaterial.emissive.set(0x6a6331);
+      this.edgeLineMaterial.color.set(0xfff2c4);
+      this.edgeLineMaterial.emissive.set(0x746122);
+      this.edgeLineMaterial.emissiveIntensity = 0.28;
+      this.waterMaterial.color.set(0x5f9fb6);
+      this.waterMaterial.emissive.set(0x1a4052);
+      this.waterMaterial.emissiveIntensity = 0.16;
+      this.iceMaterial.color.set(0x262a2e);
+      this.iceMaterial.emissive.set(0x1a2430);
+      this.iceMaterial.emissiveIntensity = 0.04;
+      this.windowMaterial.color.set(0x567185);
+      this.windowMaterial.emissive.set(0x173040);
+      this.windowMaterial.emissiveIntensity = 0.16;
+    }
+
+    this.buildingMaterials.forEach((material, index) => {
+      const baseColor = BUILDING_COLORS[index % BUILDING_COLORS.length];
+      material.color.set(baseColor);
+      if (highContrast) {
+        material.color.lerp(new THREE.Color(0xe2e7ec), 0.2);
+      } else if (colorAssist) {
+        material.color.offsetHSL(0.02, 0.08, 0.04);
+      }
+    });
+
+    this.treeMaterials.forEach((material, index) => {
+      const baseColor = TREE_GREENS[index % TREE_GREENS.length];
+      material.color.set(baseColor);
+      if (highContrast) {
+        material.color.offsetHSL(0, -0.12, -0.08);
+      } else if (colorAssist) {
+        material.color.offsetHSL(0.04, 0.12, 0.02);
+      }
+    });
+
+    this.shrubMaterials.forEach((material, index) => {
+      const baseColor = SHRUB_GREENS[index % SHRUB_GREENS.length];
+      material.color.set(baseColor);
+      if (highContrast) {
+        material.color.offsetHSL(0, -0.1, -0.06);
+      } else if (colorAssist) {
+        material.color.offsetHSL(0.03, 0.08, 0.01);
+      }
+    });
+
+    this.distantCityMaterials.forEach((material, index) => {
+      const baseColor = DISTANT_CITY_COLORS[index % DISTANT_CITY_COLORS.length];
+      material.color.set(baseColor);
+      if (highContrast) {
+        material.color.lerp(new THREE.Color(0xdde5ef), 0.26);
+      } else if (colorAssist) {
+        material.color.offsetHSL(0.01, 0.08, 0.03);
+      }
+    });
   }
 
   setSeed(seed) {

@@ -13,8 +13,11 @@ const DATA_DIR = path.join(ROOT, "data");
 const HIGH_SCORES_PATH = path.join(DATA_DIR, "highscores.json");
 const STATS_PATH = path.join(DATA_DIR, "stats.json");
 const MAX_SCORES = 250;
-const MULTIPLAYER_TARGET_DISTANCE = 10000;
+const MULTIPLAYER_TARGET_DISTANCE = 6000;
 const MULTIPLAYER_COUNTDOWN_MS = 5000;
+const GRID_LANE_OFFSETS = [0, -4.8, 4.8];
+const GRID_ROW_SPACING = 18;
+const GRID_START_OFFSET = 26;
 const FEATURED_NAME = "Nick Jongens";
 const MAX_TRACKED_VISITORS = 250;
 const MAX_RECENT_EVENTS = 200;
@@ -657,9 +660,40 @@ function buildLobbyState(lobby) {
     lobbyCode: lobby.code,
     ownerId: lobby.ownerId,
     raceStatus: lobby.race.status,
+    targetDistance: lobby.race.targetDistance,
     players,
     canStart: players.length >= 2,
   };
+}
+
+function buildWaitingLobbies() {
+  return [...lobbies.values()]
+    .filter((lobby) => lobby.race.status === "lobby")
+    .map((lobby) => ({
+      code: lobby.code,
+      hostName: lobby.players.get(lobby.ownerId)?.name || "Host",
+      playerCount: lobby.players.size,
+      createdAt: lobby.createdAt,
+    }))
+    .sort((lobbyA, lobbyB) => {
+      if (lobbyA.playerCount !== lobbyB.playerCount) {
+        return lobbyB.playerCount - lobbyA.playerCount;
+      }
+
+      return lobbyA.createdAt - lobbyB.createdAt;
+    });
+}
+
+function buildStartGrid(players) {
+  return players.map((player, index) => {
+    const row = Math.floor(index / GRID_LANE_OFFSETS.length);
+    const laneOffset = GRID_LANE_OFFSETS[index % GRID_LANE_OFFSETS.length];
+    return {
+      id: player.id,
+      laneOffset,
+      s: -(GRID_START_OFFSET + row * GRID_ROW_SPACING),
+    };
+  });
 }
 
 function buildRaceState(lobby) {
@@ -795,13 +829,33 @@ function broadcastRaceState(lobby) {
   }
 }
 
+function broadcastWaitingLobbies() {
+  const payload = {
+    type: "waiting_lobbies",
+    lobbies: buildWaitingLobbies(),
+  };
+
+  for (const client of webSocketClients.values()) {
+    sendWsMessage(client.socket, payload);
+  }
+}
+
+function resetLobbyToWaiting(lobby) {
+  lobby.race = {
+    status: "lobby",
+    startAt: null,
+    targetDistance: MULTIPLAYER_TARGET_DISTANCE,
+    trackSeed: null,
+    startGrid: [],
+  };
+}
+
 function finishRaceIfComplete(lobby) {
   const players = [...lobby.players.values()];
   if (!players.length || !players.every((client) => client.raceState?.finished)) {
     return;
   }
 
-  lobby.race.status = "finished";
   const results = buildRaceState(lobby).players.map(({ id, name, finishTime, place }) => ({
     id,
     name,
@@ -822,7 +876,9 @@ function finishRaceIfComplete(lobby) {
     sendWsMessage(client.socket, payload);
   }
 
+  resetLobbyToWaiting(lobby);
   broadcastLobbyState(lobby);
+  broadcastWaitingLobbies();
 }
 
 function removeClientFromLobby(client) {
@@ -843,6 +899,7 @@ function removeClientFromLobby(client) {
 
   if (!lobby.players.size) {
     lobbies.delete(lobby.code);
+    broadcastWaitingLobbies();
     return;
   }
 
@@ -851,10 +908,11 @@ function removeClientFromLobby(client) {
   }
 
   if (lobby.race.status === "running" && lobby.players.size < 2) {
-    lobby.race.status = "lobby";
+    resetLobbyToWaiting(lobby);
   }
 
   broadcastLobbyState(lobby);
+  broadcastWaitingLobbies();
   if (lobby.race.status === "running") {
     broadcastRaceState(lobby);
   }
@@ -875,6 +933,7 @@ function handleWsPayload(client, payload) {
       const code = createLobbyCode();
       const lobby = {
         code,
+        createdAt: Date.now(),
         ownerId: client.id,
         players: new Map(),
         race: {
@@ -882,6 +941,7 @@ function handleWsPayload(client, payload) {
           startAt: null,
           targetDistance: MULTIPLAYER_TARGET_DISTANCE,
           trackSeed: null,
+          startGrid: [],
         },
       };
       client.name = normalizeName(payload.name);
@@ -891,6 +951,7 @@ function handleWsPayload(client, payload) {
       lobby.players.set(client.id, client);
       lobbies.set(code, lobby);
       broadcastLobbyState(lobby);
+      broadcastWaitingLobbies();
       break;
     }
 
@@ -914,11 +975,19 @@ function handleWsPayload(client, payload) {
       client.lobbyCode = lobby.code;
       lobby.players.set(client.id, client);
       broadcastLobbyState(lobby);
+      broadcastWaitingLobbies();
       break;
     }
 
     case "leave_lobby":
       removeClientFromLobby(client);
+      break;
+
+    case "list_lobbies":
+      sendWsMessage(client.socket, {
+        type: "waiting_lobbies",
+        lobbies: buildWaitingLobbies(),
+      });
       break;
 
     case "toggle_ready": {
@@ -944,6 +1013,8 @@ function handleWsPayload(client, payload) {
       }
 
       const players = [...lobby.players.values()];
+      const startGrid = buildStartGrid(players);
+      const startSlotById = new Map(startGrid.map((slot) => [slot.id, slot]));
       if (players.length < 2) {
         sendWsMessage(client.socket, { type: "error", message: "At least two drivers are required." });
         break;
@@ -954,13 +1025,15 @@ function handleWsPayload(client, payload) {
         startAt: Date.now() + MULTIPLAYER_COUNTDOWN_MS,
         targetDistance: MULTIPLAYER_TARGET_DISTANCE,
         trackSeed: Math.floor(Math.random() * 0xffffffff),
+        startGrid,
       };
 
       for (const player of players) {
+        const slot = startSlotById.get(player.id);
         player.ready = false;
         player.raceState = {
-          s: 0,
-          laneOffset: 0,
+          s: slot?.s ?? 0,
+          laneOffset: slot?.laneOffset ?? 0,
           speed: 0,
           finished: false,
           finishTime: null,
@@ -973,6 +1046,7 @@ function handleWsPayload(client, payload) {
         startAt: lobby.race.startAt,
         targetDistance: lobby.race.targetDistance,
         trackSeed: lobby.race.trackSeed,
+        startGrid,
       };
 
       for (const player of players) {
@@ -980,6 +1054,8 @@ function handleWsPayload(client, payload) {
       }
 
       broadcastLobbyState(lobby);
+      broadcastRaceState(lobby);
+      broadcastWaitingLobbies();
       break;
     }
 
@@ -1044,6 +1120,10 @@ function acceptWebSocket(request, socket) {
   };
   webSocketClients.set(socket, client);
   sendWsMessage(socket, { type: "welcome", clientId: client.id });
+  sendWsMessage(socket, {
+    type: "waiting_lobbies",
+    lobbies: buildWaitingLobbies(),
+  });
 
   socket.on("data", (chunk) => {
     client.buffer = Buffer.concat([client.buffer, chunk]);

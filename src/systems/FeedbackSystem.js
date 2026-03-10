@@ -17,6 +17,27 @@ export class FeedbackSystem {
     this.policePulseTimer = 0;
   }
 
+  getGearProfile(speed) {
+    const speedBands = [0, 10, 18, 28, 40, 54, 70];
+    const clampedSpeed = Math.max(0, speed);
+    let gearIndex = speedBands.length - 2;
+
+    for (let index = 0; index < speedBands.length - 1; index += 1) {
+      if (clampedSpeed < speedBands[index + 1]) {
+        gearIndex = index;
+        break;
+      }
+    }
+
+    const gearStart = speedBands[gearIndex];
+    const gearEnd = speedBands[gearIndex + 1];
+    const gearProgress = clamp((clampedSpeed - gearStart) / Math.max(gearEnd - gearStart, 0.001), 0, 1);
+    return {
+      gearIndex,
+      gearProgress,
+    };
+  }
+
   isVibrationSupported() {
     return typeof navigator !== "undefined" && typeof navigator.vibrate === "function";
   }
@@ -65,16 +86,16 @@ export class FeedbackSystem {
 
     this.engineFilter = this.audioContext.createBiquadFilter();
     this.engineFilter.type = "lowpass";
-    this.engineFilter.frequency.value = 620;
+    this.engineFilter.frequency.value = 320;
     this.engineFilter.Q.value = 0.75;
 
     this.engineLowOscillator = this.audioContext.createOscillator();
     this.engineLowOscillator.type = "sawtooth";
-    this.engineLowOscillator.frequency.value = 42;
+    this.engineLowOscillator.frequency.value = 30;
 
     this.engineHighOscillator = this.audioContext.createOscillator();
     this.engineHighOscillator.type = "triangle";
-    this.engineHighOscillator.frequency.value = 86;
+    this.engineHighOscillator.frequency.value = 66;
 
     this.engineLowGain = this.audioContext.createGain();
     this.engineLowGain.gain.value = 0;
@@ -114,16 +135,19 @@ export class FeedbackSystem {
     const runningFactor = running ? 1 : 0;
     const speedFactor = clamp(speed / 60, 0, 1.4);
     const boostFactor = boostActive ? 1 : 0;
-    const lowFrequency = 38 + speed * 1.9 + boostFactor * 12;
-    const highFrequency = 78 + speed * 4.4 + boostFactor * 18;
-    const masterGain = runningFactor * (0.018 + speedFactor * 0.055 + boostFactor * 0.018);
+    const { gearIndex, gearProgress } = this.getGearProfile(speed);
+    const gearBase = 26 + gearIndex * 3.8;
+    const gearSweep = 12 + gearIndex * 1.8;
+    const lowFrequency = gearBase + gearProgress * gearSweep + boostFactor * 4;
+    const highFrequency = lowFrequency * 1.85 + 10 + gearProgress * 8;
+    const masterGain = runningFactor * (0.016 + speedFactor * 0.044 + boostFactor * 0.012);
 
     this.engineLowOscillator.frequency.setTargetAtTime(lowFrequency, now, 0.08);
     this.engineHighOscillator.frequency.setTargetAtTime(highFrequency, now, 0.08);
     this.engineLowGain.gain.setTargetAtTime(masterGain * 0.85, now, 0.08);
-    this.engineHighGain.gain.setTargetAtTime(masterGain * 0.42, now, 0.08);
-    this.engineFilter.frequency.setTargetAtTime(420 + speedFactor * 980 + boostFactor * 180, now, 0.1);
-    this.masterGain.gain.setTargetAtTime(running ? 0.92 : 0, now, running ? 0.1 : 0.18);
+    this.engineHighGain.gain.setTargetAtTime(masterGain * 0.28, now, 0.08);
+    this.engineFilter.frequency.setTargetAtTime(240 + speedFactor * 420 + gearProgress * 120 + boostFactor * 90, now, 0.1);
+    this.masterGain.gain.setTargetAtTime(running ? 0.96 : 0, now, running ? 0.1 : 0.18);
   }
 
   playPassBy(relativeSpeed = 0) {
@@ -137,16 +161,16 @@ export class FeedbackSystem {
     const gain = this.audioContext.createGain();
     const filter = this.audioContext.createBiquadFilter();
 
-    oscillator.type = "triangle";
-    oscillator.frequency.setValueAtTime(260 + strength * 180, now);
-    oscillator.frequency.exponentialRampToValueAtTime(120 + strength * 40, now + 0.22);
+    oscillator.type = "sawtooth";
+    oscillator.frequency.setValueAtTime(138 + strength * 68, now);
+    oscillator.frequency.exponentialRampToValueAtTime(76 + strength * 28, now + 0.24);
 
     filter.type = "bandpass";
-    filter.frequency.setValueAtTime(540 + strength * 260, now);
-    filter.Q.value = 0.7;
+    filter.frequency.setValueAtTime(260 + strength * 150, now);
+    filter.Q.value = 0.58;
 
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.018 + strength * 0.024, now + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.015 + strength * 0.016, now + 0.03);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
 
     oscillator.connect(filter);
@@ -167,22 +191,22 @@ export class FeedbackSystem {
     const gain = this.audioContext.createGain();
     const filter = this.audioContext.createBiquadFilter();
 
-    oscillator.type = "sawtooth";
-    oscillator.frequency.setValueAtTime(180, now);
-    oscillator.frequency.exponentialRampToValueAtTime(460, now + 0.12);
+    oscillator.type = "triangle";
+    oscillator.frequency.setValueAtTime(92, now);
+    oscillator.frequency.exponentialRampToValueAtTime(188, now + 0.14);
 
-    filter.type = "highpass";
-    filter.frequency.value = 140;
+    filter.type = "lowpass";
+    filter.frequency.value = 280;
 
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.03, now + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+    gain.gain.exponentialRampToValueAtTime(0.022, now + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
 
     oscillator.connect(filter);
     filter.connect(gain);
     gain.connect(this.audioContext.destination);
     oscillator.start(now);
-    oscillator.stop(now + 0.2);
+    oscillator.stop(now + 0.24);
   }
 
   updatePolicePulse(delta, policeGap) {

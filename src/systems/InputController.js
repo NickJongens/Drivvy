@@ -22,6 +22,8 @@ export class InputController {
       throttle: 0,
       brake: 0,
       boost: 0,
+      menuPressed: false,
+      menuHeld: false,
     };
 
     this.handleMouseMove = this.handleMouseMove.bind(this);
@@ -83,6 +85,15 @@ export class InputController {
 
   getBoost() {
     return Math.max(this.keyState.boost ? 1 : 0, this.gamepadState.boost);
+  }
+
+  consumeMenuPress() {
+    if (!this.gamepadState.menuPressed) {
+      return false;
+    }
+
+    this.gamepadState.menuPressed = false;
+    return true;
   }
 
   hasThrottleInput() {
@@ -206,6 +217,8 @@ export class InputController {
     this.gamepadState.throttle = 0;
     this.gamepadState.brake = 0;
     this.gamepadState.boost = 0;
+    this.gamepadState.menuPressed = false;
+    this.gamepadState.menuHeld = false;
   }
 
   updateGamepadState() {
@@ -255,17 +268,20 @@ export class InputController {
       this.getButtonValue(activePad, 4),
       this.getButtonValue(activePad, 5)
     );
+    const menuDown = [8, 9, 16].some((index) => this.getButtonValue(activePad, index) > 0.5);
 
     this.gamepadState.connected = true;
     this.gamepadState.steer = Math.max(-1, Math.min(1, steer));
     this.gamepadState.throttle = Math.max(0, Math.min(1, throttle));
     this.gamepadState.brake = Math.max(0, Math.min(1, brake));
     this.gamepadState.boost = Math.max(0, Math.min(1, boost));
+    this.gamepadState.menuPressed = menuDown && !this.gamepadState.menuHeld;
+    this.gamepadState.menuHeld = menuDown;
   }
 
   gamepadHasSignal(gamepad) {
     const steerSignal = Math.abs(this.normalizeAxis(gamepad.axes?.[0] ?? 0)) > 0.001;
-    const buttonSignal = [0, 1, 2, 3, 4, 5, 6, 7, 12, 13, 14, 15].some(
+    const buttonSignal = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15, 16].some(
       (index) => this.getButtonValue(gamepad, index) > 0.18
     );
     return steerSignal || buttonSignal;

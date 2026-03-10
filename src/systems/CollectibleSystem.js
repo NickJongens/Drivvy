@@ -39,6 +39,58 @@ export class CollectibleSystem {
       emissiveIntensity: 0.26,
       flatShading: true,
     });
+    this.setAccessibility();
+  }
+
+  setAccessibility({ highContrast = false, colorAssist = false } = {}) {
+    if (highContrast && colorAssist) {
+      this.coinMaterial.color.set(0xfff27a);
+      this.coinMaterial.emissive.set(0xffdd33);
+      this.coinMaterial.emissiveIntensity = 0.9;
+      this.nosMaterial.color.set(0x16e0ff);
+      this.nosMaterial.emissive.set(0x00b7ff);
+      this.nosMaterial.emissiveIntensity = 0.88;
+      this.nosCapMaterial.color.set(0xffffff);
+      this.nosCapMaterial.emissive.set(0x7eeeff);
+      this.nosCapMaterial.emissiveIntensity = 0.62;
+      return;
+    }
+
+    if (highContrast) {
+      this.coinMaterial.color.set(0xffe066);
+      this.coinMaterial.emissive.set(0xffcb29);
+      this.coinMaterial.emissiveIntensity = 0.78;
+      this.nosMaterial.color.set(0x78d6ff);
+      this.nosMaterial.emissive.set(0x3db3ff);
+      this.nosMaterial.emissiveIntensity = 0.7;
+      this.nosCapMaterial.color.set(0xf8fcff);
+      this.nosCapMaterial.emissive.set(0x9edbff);
+      this.nosCapMaterial.emissiveIntensity = 0.5;
+      return;
+    }
+
+    if (colorAssist) {
+      this.coinMaterial.color.set(0xffd54d);
+      this.coinMaterial.emissive.set(0xffc21a);
+      this.coinMaterial.emissiveIntensity = 0.62;
+      this.nosMaterial.color.set(0x18dfff);
+      this.nosMaterial.emissive.set(0x00b6d9);
+      this.nosMaterial.emissiveIntensity = 0.74;
+      this.nosCapMaterial.color.set(0xe8fcff);
+      this.nosCapMaterial.emissive.set(0x6defff);
+      this.nosCapMaterial.emissiveIntensity = 0.44;
+      return;
+    }
+
+    this.coinMaterial.color.set(0xffd54d);
+    this.coinMaterial.emissive.set(0xffb703);
+    this.coinMaterial.emissiveIntensity = 0.42;
+    this.nosMaterial.color.set(0x47b6ff);
+    this.nosMaterial.emissive.set(0x1d7cf2);
+    this.nosMaterial.emissiveIntensity = 0.36;
+    this.nosCapMaterial.color.set(0xe7f5ff);
+    this.nosCapMaterial.emissive.set(0x78c5ff);
+    this.nosCapMaterial.emissiveIntensity = 0.26;
   }
 
   reset(playerS = 0) {

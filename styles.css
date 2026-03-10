@@ -65,6 +65,63 @@ body.theme-high-contrast .screen-fx__vignette {
   background: radial-gradient(circle, transparent 54%, rgba(0, 0, 0, 0.2) 100%);
 }
 
+body.theme-high-contrast .hud-panel,
+body.theme-high-contrast .overlay-card,
+body.theme-high-contrast .menu-panel,
+body.theme-high-contrast .multiplayer-panel,
+body.theme-high-contrast .multiplayer-lobby,
+body.theme-high-contrast .multiplayer-browse,
+body.theme-high-contrast .leaderboard,
+body.theme-high-contrast .consent-banner,
+body.theme-high-contrast .multiplayer-player,
+body.theme-high-contrast .multiplayer-waiting,
+body.theme-high-contrast .leaderboard-row {
+  background: rgba(2, 7, 11, 0.94) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 22px 56px rgba(0, 0, 0, 0.42);
+}
+
+body.theme-high-contrast button:not(.stealth-button) {
+  background: linear-gradient(180deg, #fff08a, #ffbe45);
+  color: #111318;
+}
+
+body.theme-high-contrast .ghost-button,
+body.theme-high-contrast button.mode-button {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+body.theme-high-contrast .menu-field input,
+body.theme-high-contrast .menu-field select {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+body.theme-color-assist .hud-panel,
+body.theme-color-assist .overlay-card,
+body.theme-color-assist .menu-panel,
+body.theme-color-assist .multiplayer-panel,
+body.theme-color-assist .multiplayer-lobby,
+body.theme-color-assist .multiplayer-browse,
+body.theme-color-assist .leaderboard,
+body.theme-color-assist .consent-banner {
+  border-color: rgba(100, 240, 255, 0.22);
+}
+
+body.theme-color-assist .hud-kicker,
+body.theme-color-assist .leaderboard-rank,
+body.theme-color-assist .multiplayer-player__you,
+body.theme-color-assist .leaderboard-badge {
+  color: #7cf1ff;
+}
+
+body.theme-color-assist button:not(.stealth-button) {
+  background: linear-gradient(180deg, #9ff8ff, #34d6ea);
+  color: #0e1b22;
+}
+
 button,
 input,
 select {
@@ -251,17 +308,51 @@ select:focus-visible {
 
 .hud-float-button {
   position: fixed;
-  top: calc(0.9rem + env(safe-area-inset-top, 0px));
+  bottom: calc(0.9rem + env(safe-area-inset-bottom, 0px));
   left: calc(0.9rem + env(safe-area-inset-left, 0px));
   z-index: 8;
   pointer-events: auto;
-  padding: 0.7rem 0.95rem;
+  width: 3.2rem;
+  height: 3.2rem;
+  padding: 0;
   border-radius: 999px;
   background: rgba(8, 17, 25, 0.72);
   color: var(--text-main);
   border: 1px solid rgba(255, 236, 207, 0.16);
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24);
   backdrop-filter: blur(12px);
+}
+
+.hud-float-button.is-active {
+  background: rgba(255, 156, 82, 0.22);
+}
+
+.hud-icon {
+  display: inline-block;
+  position: relative;
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.hud-icon--fullscreen {
+  background:
+    linear-gradient(currentColor 0 0) left top / 0.42rem 2px no-repeat,
+    linear-gradient(currentColor 0 0) left top / 2px 0.42rem no-repeat,
+    linear-gradient(currentColor 0 0) right top / 0.42rem 2px no-repeat,
+    linear-gradient(currentColor 0 0) right top / 2px 0.42rem no-repeat,
+    linear-gradient(currentColor 0 0) left bottom / 0.42rem 2px no-repeat,
+    linear-gradient(currentColor 0 0) left bottom / 2px 0.42rem no-repeat,
+    linear-gradient(currentColor 0 0) right bottom / 0.42rem 2px no-repeat,
+    linear-gradient(currentColor 0 0) right bottom / 2px 0.42rem no-repeat;
+}
+
+.hud-icon--fullscreen::after {
+  content: "";
+  position: absolute;
+  inset: 0.18rem;
+  border: 2px solid currentColor;
+  border-radius: 0.18rem;
+  opacity: 0.25;
 }
 
 .hud-float-button:hover {
@@ -323,7 +414,7 @@ select:focus-visible {
   display: grid;
   gap: 0.58rem;
   padding: 0.9rem 1rem;
-  min-width: min(20rem, 44vw);
+  min-width: min(16rem, 38vw);
 }
 
 .hud-stat {
@@ -338,6 +429,41 @@ select:focus-visible {
   font-size: 1.08rem;
 }
 
+.hud-stat--meter {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.hud-stat__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: baseline;
+}
+
+.hud-meter {
+  position: relative;
+  height: 0.6rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.hud-meter__fill {
+  display: block;
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ffe08c, #ff9d52);
+  box-shadow: 0 0 18px rgba(255, 165, 78, 0.2);
+  transition: width 120ms ease;
+}
+
+.hud-meter-state {
+  font-size: 0.88rem;
+}
+
 .hud-label {
   color: var(--text-muted);
   font-size: 0.72rem;
@@ -348,6 +474,7 @@ select:focus-visible {
   grid-column: 1 / span 5;
   grid-row: 3;
   align-self: end;
+  margin-bottom: 4.15rem;
   padding: 0.9rem 1rem 1rem;
   transition:
     opacity 220ms ease,
@@ -708,6 +835,28 @@ button.mode-button.is-active {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.multiplayer-browse {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.95rem 1rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.multiplayer-browse__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.7rem;
+  align-items: center;
+}
+
+.multiplayer-browse__head .ghost-button {
+  min-height: 2.4rem;
+  padding: 0.52rem 0.95rem;
+  flex: 0 0 auto;
+}
+
 .multiplayer-panel__head,
 .multiplayer-lobby__head {
   display: flex;
@@ -771,6 +920,41 @@ button.mode-button.is-active {
 .multiplayer-player__status {
   color: var(--text-muted);
   font-size: 0.82rem;
+}
+
+.multiplayer-waiting-list {
+  list-style: none;
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+}
+
+.multiplayer-waiting {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.multiplayer-waiting__meta {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.multiplayer-waiting__meta span,
+.multiplayer-waiting-empty {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.multiplayer-waiting .ghost-button {
+  min-height: 2.55rem;
+  padding: 0.6rem 1rem;
+  flex: 0 0 auto;
 }
 
 .leaderboard {
@@ -922,10 +1106,10 @@ button.mode-button.is-active {
 
 @media (max-width: 640px) {
   .hud-float-button {
-    top: calc(0.75rem + env(safe-area-inset-top, 0px));
+    bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
     left: calc(0.75rem + env(safe-area-inset-left, 0px));
-    padding: 0.66rem 0.82rem;
-    font-size: 0.82rem;
+    width: 3rem;
+    height: 3rem;
   }
 
   .overlay--menu {
