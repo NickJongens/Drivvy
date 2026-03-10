@@ -15,11 +15,26 @@ export class Hud {
     restartButton,
     menuButton,
     menuOverlay,
+    accessibilityOverlay,
+    accessibilityNamePanel,
+    accessibilityQuestionPanel,
+    accessibilitySetupPanel,
+    onboardingNameInput,
+    accessibilityNameContinueButton,
+    accessibilityYesButton,
+    accessibilityNoButton,
+    accessibilityContinueButton,
+    accessibilityContrastButton,
+    accessibilityColorButton,
     menuPlayButton,
     menuNewRunButton,
     playerNameInput,
     leaderboardList,
     menuStatus,
+    accessibilityReviewButton,
+    accessibilityStatus,
+    highContrastButton,
+    colorAssistButton,
     aiToggleButton,
     secretPanel,
     secretTrigger,
@@ -42,9 +57,11 @@ export class Hud {
     leftIndicator,
     rightIndicator,
     menuTrigger,
+    fullscreenToggle,
     controlsPanel,
     graphicsPresetSelect,
     graphicsPresetStatus,
+    vibrationToggleButton,
     trackingConsent,
     trackingStatus,
     trackingAcceptButton,
@@ -65,11 +82,26 @@ export class Hud {
     this.restartButton = restartButton;
     this.menuButton = menuButton;
     this.menuOverlay = menuOverlay;
+    this.accessibilityOverlay = accessibilityOverlay;
+    this.accessibilityNamePanel = accessibilityNamePanel;
+    this.accessibilityQuestionPanel = accessibilityQuestionPanel;
+    this.accessibilitySetupPanel = accessibilitySetupPanel;
+    this.onboardingNameInput = onboardingNameInput;
+    this.accessibilityNameContinueButton = accessibilityNameContinueButton;
+    this.accessibilityYesButton = accessibilityYesButton;
+    this.accessibilityNoButton = accessibilityNoButton;
+    this.accessibilityContinueButton = accessibilityContinueButton;
+    this.accessibilityContrastButton = accessibilityContrastButton;
+    this.accessibilityColorButton = accessibilityColorButton;
     this.menuPlayButton = menuPlayButton;
     this.menuNewRunButton = menuNewRunButton;
     this.playerNameInput = playerNameInput;
     this.leaderboardList = leaderboardList;
     this.menuStatus = menuStatus;
+    this.accessibilityReviewButton = accessibilityReviewButton;
+    this.accessibilityStatus = accessibilityStatus;
+    this.highContrastButton = highContrastButton;
+    this.colorAssistButton = colorAssistButton;
     this.aiToggleButton = aiToggleButton;
     this.secretPanel = secretPanel;
     this.secretTrigger = secretTrigger;
@@ -92,9 +124,11 @@ export class Hud {
     this.leftIndicator = leftIndicator;
     this.rightIndicator = rightIndicator;
     this.menuTrigger = menuTrigger;
+    this.fullscreenToggle = fullscreenToggle;
     this.controlsPanel = controlsPanel;
     this.graphicsPresetSelect = graphicsPresetSelect;
     this.graphicsPresetStatus = graphicsPresetStatus;
+    this.vibrationToggleButton = vibrationToggleButton;
     this.trackingConsent = trackingConsent;
     this.trackingStatus = trackingStatus;
     this.trackingAcceptButton = trackingAcceptButton;
@@ -184,6 +218,29 @@ export class Hud {
     this.scoreStatus.textContent = message;
   }
 
+  showAccessibilityPrompt({ step = "name" } = {}) {
+    this.accessibilityOverlay?.classList.remove("is-hidden");
+    this.setAccessibilityPromptStep(step);
+  }
+
+  hideAccessibilityPrompt() {
+    this.accessibilityOverlay?.classList.add("is-hidden");
+  }
+
+  isAccessibilityPromptVisible() {
+    if (!this.accessibilityOverlay) {
+      return false;
+    }
+
+    return !this.accessibilityOverlay.classList.contains("is-hidden");
+  }
+
+  setAccessibilityPromptStep(step) {
+    this.accessibilityNamePanel?.classList.toggle("is-hidden", step !== "name");
+    this.accessibilityQuestionPanel?.classList.toggle("is-hidden", step !== "question");
+    this.accessibilitySetupPanel?.classList.toggle("is-hidden", step !== "setup");
+  }
+
   showMenu({ canResume = false, aiEnabled = false, mode = this.menuMode } = {}) {
     this.menuPlayButton.textContent = canResume ? "Resume Run" : "Start Run";
     this.menuNewRunButton.classList.toggle("is-hidden", !canResume);
@@ -223,6 +280,28 @@ export class Hud {
     }
   }
 
+  setAccessibilityStatus(message) {
+    if (this.accessibilityStatus) {
+      this.accessibilityStatus.textContent = message;
+    }
+  }
+
+  setFullscreenAvailable(available) {
+    if (this.fullscreenToggle) {
+      this.fullscreenToggle.disabled = !available;
+      this.fullscreenToggle.classList.toggle("is-hidden", !available);
+    }
+  }
+
+  setFullscreenActive(active) {
+    if (!this.fullscreenToggle) {
+      return;
+    }
+
+    this.fullscreenToggle.textContent = active ? "Exit Full" : "Full Screen";
+    this.fullscreenToggle.setAttribute("aria-pressed", active ? "true" : "false");
+  }
+
   setAiEnabled(enabled) {
     this.aiEnabled = enabled;
     if (!this.aiToggleButton) {
@@ -242,6 +321,38 @@ export class Hud {
   setGraphicsPresetStatus(message) {
     if (this.graphicsPresetStatus) {
       this.graphicsPresetStatus.textContent = message;
+    }
+  }
+
+  setVibrationEnabled(enabled, supported = true) {
+    if (!this.vibrationToggleButton) {
+      return;
+    }
+
+    if (!supported) {
+      this.vibrationToggleButton.disabled = true;
+      this.vibrationToggleButton.textContent = "Vibration: Unavailable";
+      return;
+    }
+
+    this.vibrationToggleButton.disabled = false;
+    this.vibrationToggleButton.textContent = enabled ? "Vibration: On" : "Vibration: Off";
+  }
+
+  setAccessibilitySettings({ highContrast = false, colorAssist = false } = {}) {
+    const highContrastLabel = highContrast ? "High Contrast: On" : "High Contrast: Off";
+    const colorAssistLabel = colorAssist ? "Color Assist: On" : "Color Assist: Off";
+    if (this.highContrastButton) {
+      this.highContrastButton.textContent = highContrastLabel;
+    }
+    if (this.colorAssistButton) {
+      this.colorAssistButton.textContent = colorAssistLabel;
+    }
+    if (this.accessibilityContrastButton) {
+      this.accessibilityContrastButton.textContent = highContrastLabel;
+    }
+    if (this.accessibilityColorButton) {
+      this.accessibilityColorButton.textContent = colorAssistLabel;
     }
   }
 
@@ -282,11 +393,23 @@ export class Hud {
 
   setPlayerName(name) {
     this.playerNameInput.value = name || "";
+    if (this.onboardingNameInput) {
+      this.onboardingNameInput.value = name || "";
+    }
   }
 
   focusNameInput() {
     this.playerNameInput.focus();
     this.playerNameInput.select();
+  }
+
+  getOnboardingName() {
+    return this.onboardingNameInput?.value.trim() || "";
+  }
+
+  focusOnboardingNameInput() {
+    this.onboardingNameInput?.focus();
+    this.onboardingNameInput?.select();
   }
 
   getLobbyCode() {
@@ -450,6 +573,40 @@ export class Hud {
     this.menuTrigger.addEventListener("click", handler);
   }
 
+  setAccessibilityPromptYesHandler(handler) {
+    this.accessibilityYesButton?.addEventListener("click", handler);
+  }
+
+  setAccessibilityNameContinueHandler(handler) {
+    this.accessibilityNameContinueButton?.addEventListener("click", handler);
+  }
+
+  setAccessibilityPromptNoHandler(handler) {
+    this.accessibilityNoButton?.addEventListener("click", handler);
+  }
+
+  setAccessibilityPromptContinueHandler(handler) {
+    this.accessibilityContinueButton?.addEventListener("click", handler);
+  }
+
+  setAccessibilityReviewHandler(handler) {
+    this.accessibilityReviewButton?.addEventListener("click", handler);
+  }
+
+  setHighContrastHandler(handler) {
+    this.highContrastButton?.addEventListener("click", handler);
+    this.accessibilityContrastButton?.addEventListener("click", handler);
+  }
+
+  setColorAssistHandler(handler) {
+    this.colorAssistButton?.addEventListener("click", handler);
+    this.accessibilityColorButton?.addEventListener("click", handler);
+  }
+
+  setFullscreenHandler(handler) {
+    this.fullscreenToggle?.addEventListener("click", handler);
+  }
+
   setMenuModeHandler(handler) {
     this.onMenuModeChange = handler;
   }
@@ -484,6 +641,10 @@ export class Hud {
 
   setTrackingConsentHandler(handler) {
     this.onTrackingConsent = handler;
+  }
+
+  setVibrationToggleHandler(handler) {
+    this.vibrationToggleButton?.addEventListener("click", handler);
   }
 
   setGraphicsPresetHandler(handler) {

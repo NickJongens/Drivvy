@@ -11,6 +11,7 @@
   --accent-strong: #ff9b54;
   --danger: #ff8f7a;
   --shadow: rgba(0, 0, 0, 0.36);
+  --focus-ring: rgba(255, 209, 102, 0.42);
 }
 
 * {
@@ -33,10 +34,48 @@ body {
   letter-spacing: 0.04em;
 }
 
+body.theme-high-contrast {
+  --bg-top: #38536e;
+  --bg-bottom: #03080d;
+  --panel-bg: rgba(3, 8, 13, 0.9);
+  --panel-strong: rgba(1, 4, 8, 0.96);
+  --panel-border: rgba(255, 255, 255, 0.3);
+  --text-main: #ffffff;
+  --text-muted: #d7e8f3;
+  --accent: #ffe56b;
+  --accent-strong: #ffb44d;
+  --danger: #ffd166;
+  --shadow: rgba(0, 0, 0, 0.58);
+  --focus-ring: rgba(255, 229, 107, 0.58);
+}
+
+body.theme-color-assist {
+  --accent: #64f0ff;
+  --accent-strong: #00b6d9;
+  --danger: #ffd54d;
+  --focus-ring: rgba(100, 240, 255, 0.42);
+}
+
+body.theme-high-contrast .screen-fx__glare,
+body.theme-high-contrast .screen-fx__grain {
+  opacity: 0.03;
+}
+
+body.theme-high-contrast .screen-fx__vignette {
+  background: radial-gradient(circle, transparent 54%, rgba(0, 0, 0, 0.2) 100%);
+}
+
 button,
 input,
 select {
   font: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 #app,
@@ -210,6 +249,25 @@ select {
   gap: 1rem;
 }
 
+.hud-float-button {
+  position: fixed;
+  top: calc(0.9rem + env(safe-area-inset-top, 0px));
+  left: calc(0.9rem + env(safe-area-inset-left, 0px));
+  z-index: 8;
+  pointer-events: auto;
+  padding: 0.7rem 0.95rem;
+  border-radius: 999px;
+  background: rgba(8, 17, 25, 0.72);
+  color: var(--text-main);
+  border: 1px solid rgba(255, 236, 207, 0.16);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(12px);
+}
+
+.hud-float-button:hover {
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
+}
+
 .hud-panel {
   border: 1px solid var(--panel-border);
   background: var(--panel-bg);
@@ -328,7 +386,10 @@ select {
   padding: 1rem;
   background: transparent;
   backdrop-filter: none;
-  pointer-events: none;
+  pointer-events: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .overlay.is-hidden {
@@ -374,14 +435,18 @@ select {
 }
 
 .overlay-card--menu {
-  width: min(31rem, calc(100vw - 2rem));
+  width: min(36rem, calc(100vw - 2rem));
   display: grid;
-  gap: 0.85rem;
-  padding: 1.1rem 1.1rem 1rem;
+  gap: 1rem;
+  padding: 1.15rem 1.15rem 1rem;
   background: rgba(8, 14, 19, 0.94);
   border-color: rgba(255, 236, 207, 0.14);
   box-shadow: 0 28px 64px rgba(0, 0, 0, 0.34);
   pointer-events: auto;
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .secret-trigger h2 {
@@ -443,6 +508,19 @@ select {
   gap: 0.75rem;
 }
 
+.menu-actions > button,
+.overlay-actions > button {
+  flex: 1 1 12rem;
+}
+
+.menu-actions--stack > button {
+  flex-basis: 100%;
+}
+
+.menu-actions--tight {
+  gap: 0.6rem;
+}
+
 .menu-mode {
   display: inline-grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -456,6 +534,10 @@ select {
   border-radius: 1rem;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.menu-panel--primary {
+  gap: 1rem;
 }
 
 .menu-panel__head h3 {
@@ -491,12 +573,14 @@ button:not(.stealth-button) {
   color: #1e1914;
   cursor: pointer;
   font-weight: 700;
-  padding: 0.82rem 1.2rem;
+  min-height: 3rem;
+  padding: 0.88rem 1.2rem;
   box-shadow: 0 16px 32px rgba(255, 156, 82, 0.2);
   transition:
     transform 140ms ease,
     box-shadow 140ms ease,
     filter 140ms ease;
+  text-align: center;
 }
 
 button:not(.stealth-button):hover {
@@ -560,6 +644,17 @@ button.mode-button.is-active {
   margin: 0.45rem 0 0;
   color: var(--text-muted);
   line-height: 1.5;
+}
+
+.overlay-card--accessibility {
+  width: min(30rem, calc(100vw - 2rem));
+  display: grid;
+  gap: 1rem;
+}
+
+.accessibility-flow {
+  display: grid;
+  gap: 0.85rem;
 }
 
 .consent-banner {
@@ -815,11 +910,36 @@ button.mode-button.is-active {
   }
 
   .overlay-card--menu {
-    width: min(32rem, calc(100vw - 1.6rem));
+    width: min(34rem, calc(100vw - 1.6rem));
+    max-height: calc(100dvh - 1.6rem);
   }
 
   .consent-banner {
     align-items: start;
     flex-direction: column;
+  }
+}
+
+@media (max-width: 640px) {
+  .hud-float-button {
+    top: calc(0.75rem + env(safe-area-inset-top, 0px));
+    left: calc(0.75rem + env(safe-area-inset-left, 0px));
+    padding: 0.66rem 0.82rem;
+    font-size: 0.82rem;
+  }
+
+  .overlay--menu {
+    padding: 0.65rem;
+  }
+
+  .overlay-card--menu {
+    width: calc(100vw - 1.3rem);
+    max-height: calc(100dvh - 1.3rem);
+    padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  .menu-actions > button,
+  .overlay-actions > button {
+    flex-basis: 100%;
   }
 }

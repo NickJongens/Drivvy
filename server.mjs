@@ -441,6 +441,7 @@ async function handleTelemetryRun(request, response) {
   trackedResult.visitor.playRuns += 1;
   pushRecentEvent(recentRuns, {
     sessionId: trackedResult.visitor.sessionId,
+    name: normalizeName(payload.name),
     mode: normalizeEventMode(payload.mode),
     trackSeed: Number(payload.trackSeed) || 0,
     startedAt: new Date().toISOString(),
@@ -650,7 +651,6 @@ function buildPlayerSnapshot(client) {
 
 function buildLobbyState(lobby) {
   const players = [...lobby.players.values()].map(buildPlayerSnapshot);
-  const readyPlayers = players.filter((player) => player.ready).length;
 
   return {
     type: "lobby_state",
@@ -658,7 +658,7 @@ function buildLobbyState(lobby) {
     ownerId: lobby.ownerId,
     raceStatus: lobby.race.status,
     players,
-    canStart: players.length >= 2 && readyPlayers === players.length,
+    canStart: players.length >= 2,
   };
 }
 
@@ -944,9 +944,8 @@ function handleWsPayload(client, payload) {
       }
 
       const players = [...lobby.players.values()];
-      const everyoneReady = players.length >= 2 && players.every((player) => player.ready);
-      if (!everyoneReady) {
-        sendWsMessage(client.socket, { type: "error", message: "All players must be ready." });
+      if (players.length < 2) {
+        sendWsMessage(client.socket, { type: "error", message: "At least two drivers are required." });
         break;
       }
 

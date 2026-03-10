@@ -6,9 +6,64 @@ const LANE_OFFSETS = [-LANE_WIDTH, 0, LANE_WIDTH];
 const POLICE_ESCAPE_DISTANCE = 260;
 const POLICE_SPAWN_INTERVAL = 920;
 const RACER_SPAWN_INTERVAL = 520;
+const TRAFFIC_QUALITY_PRESETS = {
+  low: {
+    minTrafficTarget: 3,
+    baseTrafficTarget: 3.8,
+    spawnBaseDistance: 205,
+    spawnVisibilityFactor: 58,
+    spawnAttempts: 6,
+    adaptiveDensityScale: 0.72,
+    adaptiveHorizonScale: 0.68,
+    visibleNear: 18,
+    visibleFarBase: 132,
+    visibleFarVisibilityFactor: 56,
+    behaviorInterval: 0.32,
+    earlyRacerTarget: 0,
+    lateRacerTarget: 1,
+  },
+  medium: {
+    minTrafficTarget: 3,
+    baseTrafficTarget: 4.4,
+    spawnBaseDistance: 224,
+    spawnVisibilityFactor: 66,
+    spawnAttempts: 8,
+    adaptiveDensityScale: 0.82,
+    adaptiveHorizonScale: 0.8,
+    visibleNear: 18,
+    visibleFarBase: 148,
+    visibleFarVisibilityFactor: 64,
+    behaviorInterval: 0.24,
+    earlyRacerTarget: 1,
+    lateRacerTarget: 1,
+  },
+  high: {
+    minTrafficTarget: 4,
+    baseTrafficTarget: 5.4,
+    spawnBaseDistance: 270,
+    spawnVisibilityFactor: 92,
+    spawnAttempts: 16,
+    adaptiveDensityScale: 1,
+    adaptiveHorizonScale: 1,
+    visibleNear: 18,
+    visibleFarBase: 178,
+    visibleFarVisibilityFactor: 82,
+    behaviorInterval: 0.14,
+    earlyRacerTarget: 1,
+    lateRacerTarget: 2,
+  },
+};
+
+function normalizeTrafficQualityPreset(value) {
+  if (Object.prototype.hasOwnProperty.call(TRAFFIC_QUALITY_PRESETS, value)) {
+    return value;
+  }
+
+  return "high";
+}
 
 export class TrafficSystem {
-  constructor(scene, track) {
+  constructor(scene, track, { qualityPreset = "high" } = {}) {
     this.scene = scene;
     this.track = track;
     this.vehicles = [];
@@ -17,6 +72,14 @@ export class TrafficSystem {
     this.nextPoliceSpawnS = 240;
     this.nextRacerSpawnS = 120;
     this.time = 0;
+    this.behaviorUpdateTimer = 0;
+    this.qualityPreset = normalizeTrafficQualityPreset(qualityPreset);
+    this.quality = TRAFFIC_QUALITY_PRESETS[this.qualityPreset];
+  }
+
+  setQualityPreset(preset) {
+    this.qualityPreset = normalizeTrafficQualityPreset(preset);
+    this.quality = TRAFFIC_QUALITY_PRESETS[this.qualityPreset];
   }
 
   reset(playerS = 0) {
@@ -30,6 +93,7 @@ export class TrafficSystem {
     this.nextPoliceSpawnS = playerS + 180 + Math.random() * 120;
     this.nextRacerSpawnS = playerS + 110 + Math.random() * 80;
     this.time = 0;
+    this.behaviorUpdateTimer = 0;
   }
 
   update(delta, player, weather, { allowPolice = true, allowRacers = true } = {}) {
@@ -37,17 +101,26 @@ export class TrafficSystem {
     const activeRouteId = player.route.branchId || "main";
     const policeCount = this.countVehiclesOnRoute(activeRouteId, "police");
     const adaptiveTraffic = this.getAdaptiveTrafficProfile(activeRouteId, player, weather);
+    const trafficProfile = this.quality;
     const trafficTarget = Math.max(
-      4,
-      Math.round(5.4 + weather.trafficModifier * 2 + adaptiveTraffic.densityOffset) - policeCount
+      trafficProfile.minTrafficTarget,
+      Math.round(
+        trafficProfile.baseTrafficTarget +
+          weather.trafficModifier * 2 +
+          adaptiveTraffic.densityOffset * trafficProfile.adaptiveDensityScale
+      ) - policeCount
     );
-    const spawnHorizon = player.s + 270 + weather.visibility * 92 + adaptiveTraffic.horizonOffset;
+    const spawnHorizon =
+      player.s +
+      trafficProfile.spawnBaseDistance +
+      weather.visibility * trafficProfile.spawnVisibilityFactor +
+      adaptiveTraffic.horizonOffset * trafficProfile.adaptiveHorizonScale;
     let spawnCursor = this.routeSpawnCursor.get(activeRouteId) ?? player.s + 90;
     let attempts = 0;
 
     while (
       (this.countStandardTraffic(activeRouteId) < trafficTarget || spawnCursor < spawnHorizon) &&
-      attempts < 16
+      attempts < trafficProfile.spawnAttempts
     ) {
       spawnCursor = this.spawnTrafficVehicle(player, weather, activeRouteId, spawnCursor);
       attempts += 1;
@@ -55,7 +128,12 @@ export class TrafficSystem {
     this.routeSpawnCursor.set(activeRouteId, spawnCursor);
     this.ensureVisibleTrafficAhead(player, weather, activeRouteId);
 
-    const racerTarget = activeRouteId === "main" ? (player.s > 900 ? 2 : 1) : 0;
+    const racerTarget =
+      activeRouteId === "main"
+        ? player.s > 900
+          ? trafficProfile.lateRacerTarget
+          : trafficProfile.earlyRacerTarget
+        : 0;
     if (
       allowRacers &&
       activeRouteId === "main" &&
@@ -73,10 +151,14 @@ export class TrafficSystem {
       }
     }
 
-    const routes = this.groupVehiclesByRoute();
-    for (const vehicles of routes.values()) {
-      vehicles.sort((vehicleA, vehicleB) => vehicleA.s - vehicleB.s);
-      this.planLaneChanges(vehicles, player);
+    this.behaviorUpdateTimer = Math.max(0, this.behaviorUpdateTimer - delta);
+    if (this.behaviorUpdateTimer <= 0) {
+      const routes = this.groupVehiclesByRoute();
+      for (const vehicles of routes.values()) {
+        vehicles.sort((vehicleA, vehicleB) => vehicleA.s - vehicleB.s);
+        this.planLaneChanges(vehicles, player);
+      }
+      this.behaviorUpdateTimer = trafficProfile.behaviorInterval;
     }
 
     for (let index = this.vehicles.length - 1; index >= 0; index -= 1) {
@@ -782,8 +864,8 @@ export class TrafficSystem {
   }
 
   ensureVisibleTrafficAhead(player, weather, routeId) {
-    const visibleNear = 18;
-    const visibleFar = 178 + weather.visibility * 82;
+    const visibleNear = this.quality.visibleNear;
+    const visibleFar = this.quality.visibleFarBase + weather.visibility * this.quality.visibleFarVisibilityFactor;
 
     if (this.hasVehicleInWindow(routeId, player.s + visibleNear, player.s + visibleFar)) {
       return;

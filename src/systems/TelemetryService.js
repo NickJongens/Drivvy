@@ -26,7 +26,7 @@ export class TelemetryService {
     });
   }
 
-  async recordRun({ sessionId, consent, mode = "solo", trackSeed = 0 }) {
+  async recordRun({ sessionId, consent, mode = "solo", trackSeed = 0, name = "Guest" }) {
     if (!consent || !sessionId) {
       return { tracked: false };
     }
@@ -34,6 +34,7 @@ export class TelemetryService {
     return this.postJson("/run", {
       consent: true,
       sessionId,
+      name,
       mode,
       trackSeed,
     });

@@ -3,6 +3,7 @@ import { createPlayerCar, createRivalCar, setVehicleFactoryQuality } from "./ent
 import { TrafficSystem } from "./entities/TrafficSystem.js";
 import { InputController } from "./systems/InputController.js";
 import { CollectibleSystem } from "./systems/CollectibleSystem.js";
+import { FeedbackSystem } from "./systems/FeedbackSystem.js";
 import { LeaderboardService } from "./systems/LeaderboardService.js";
 import { MultiplayerClient } from "./systems/MultiplayerClient.js";
 import { ScenerySystem } from "./systems/ScenerySystem.js";
@@ -22,6 +23,10 @@ const AUTOPILOT_STORAGE_KEY = "drivvy.aiAssist";
 const PLAYER_NAME_STORAGE_KEY = "drivvy.playerName";
 const SECRET_STORAGE_KEY = "drivvy.secretMenu";
 const GRAPHICS_PRESET_STORAGE_KEY = "drivvy.graphicsPreset";
+const VIBRATION_STORAGE_KEY = "drivvy.vibration";
+const ACCESSIBILITY_PROMPT_SEEN_STORAGE_KEY = "drivvy.a11yPromptSeen";
+const HIGH_CONTRAST_STORAGE_KEY = "drivvy.highContrast";
+const COLOR_ASSIST_STORAGE_KEY = "drivvy.colorAssist";
 const LEGACY_AUTOPILOT_STORAGE_KEY = "polySprint.autopilot";
 const LEGACY_PLAYER_NAME_STORAGE_KEY = "polySprint.playerName";
 const LEGACY_SECRET_STORAGE_KEY = "polySprint.secretMenu";
@@ -41,11 +46,11 @@ const GRAPHICS_PRESETS = {
   medium: {
     label: "Balanced",
     maxPixelRatio: 1.35,
-    renderScale: 0.9,
-    cameraFar: 1200,
+    renderScale: 0.84,
+    cameraFar: 1000,
     rearMirror: true,
-    sceneryFlocks: 2,
-    particleBudget: 260,
+    sceneryFlocks: 1,
+    particleBudget: 180,
     dynamicVehicleLights: false,
     trackQuality: "medium",
   },
@@ -125,6 +130,12 @@ export class Game {
     this.telemetryService = new TelemetryService();
     this.trackingConsentService = new TrackingConsentService();
     this.multiplayerClient = new MultiplayerClient();
+    this.feedbackSystem = new FeedbackSystem({
+      vibrationEnabled: readStoredValue(VIBRATION_STORAGE_KEY, "1") !== "0",
+    });
+    this.highContrastEnabled = readStoredValue(HIGH_CONTRAST_STORAGE_KEY, "0") === "1";
+    this.colorAssistEnabled = readStoredValue(COLOR_ASSIST_STORAGE_KEY, "0") === "1";
+    this.accessibilityPromptSeen = readStoredValue(ACCESSIBILITY_PROMPT_SEEN_STORAGE_KEY, "0") === "1";
     this.graphicsPreset = normalizeGraphicsPreset(readStoredValue(GRAPHICS_PRESET_STORAGE_KEY, "medium"));
     this.graphics = GRAPHICS_PRESETS[this.graphicsPreset];
 
@@ -156,7 +167,7 @@ export class Game {
     setVehicleFactoryQuality({ dynamicLights: this.graphics.dynamicVehicleLights });
     this.track = new TrackManager(this.scene, { qualityPreset: this.graphics.trackQuality });
     this.weatherSystem = new WeatherSystem(this.scene);
-    this.trafficSystem = new TrafficSystem(this.scene, this.track);
+    this.trafficSystem = new TrafficSystem(this.scene, this.track, { qualityPreset: this.graphicsPreset });
     this.scenerySystem = new ScenerySystem(this.scene, this.track);
     this.collectibleSystem = new CollectibleSystem(this.scene, this.track);
     this.input = new InputController(this.mount);
@@ -244,6 +255,7 @@ export class Game {
     this.handleKeyDown = this.handleKeyDown.bind(this);
     this.handleKeyUp = this.handleKeyUp.bind(this);
     this.handleVisibility = this.handleVisibility.bind(this);
+    this.handleFullscreenChange = this.handleFullscreenChange.bind(this);
     this.animate = this.animate.bind(this);
 
     this.hud.setRestartHandler(() => this.startNewRun());
@@ -255,6 +267,17 @@ export class Game {
     this.hud.setAiToggleHandler((nextValue) => this.setAiEnabled(nextValue));
     this.hud.setGraphicsPresetHandler((preset) => this.setGraphicsPreset(preset));
     this.hud.setTrackingConsentHandler((choice) => this.setTrackingConsent(choice));
+    this.hud.setAccessibilityNameContinueHandler(() => this.handleAccessibilityNameContinue());
+    this.hud.setAccessibilityPromptYesHandler(() => this.handleAccessibilityPromptYes());
+    this.hud.setAccessibilityPromptNoHandler(() => this.handleAccessibilityPromptNo());
+    this.hud.setAccessibilityPromptContinueHandler(() => this.handleAccessibilityPromptContinue());
+    this.hud.setAccessibilityReviewHandler(() => this.showAccessibilityPrompt({ step: "setup" }));
+    this.hud.setHighContrastHandler(() => this.toggleHighContrast());
+    this.hud.setColorAssistHandler(() => this.toggleColorAssist());
+    this.hud.setFullscreenHandler(() => {
+      void this.toggleFullscreen();
+    });
+    this.hud.setVibrationToggleHandler(() => this.setVibrationEnabled(!this.feedbackSystem.isVibrationEnabled()));
     this.hud.setSecretUnlockHandler(() => {
       this.secretMenuUnlocked = true;
       writeStoredValue(SECRET_STORAGE_KEY, "1");
@@ -303,14 +326,33 @@ export class Game {
 
     this.hud.setAiEnabled(this.aiEnabled);
     this.hud.setGraphicsPreset(this.graphicsPreset);
+    this.hud.setFullscreenAvailable(this.isFullscreenSupported());
+    this.hud.setAccessibilitySettings({
+      highContrast: this.highContrastEnabled,
+      colorAssist: this.colorAssistEnabled,
+    });
+    this.hud.setAccessibilityStatus(this.getAccessibilityStatusLabel());
+    this.hud.setVibrationEnabled(
+      this.feedbackSystem.isVibrationEnabled(),
+      this.feedbackSystem.isVibrationSupported()
+    );
     this.hud.setPlayerName(readStoredValue(PLAYER_NAME_STORAGE_KEY, "", LEGACY_PLAYER_NAME_STORAGE_KEY));
     this.hud.setMultiplayerStatus(this.multiplayer.status);
     this.hud.setControlsVisible(true);
+    this.applyAccessibilitySettings(
+      {
+        highContrast: this.highContrastEnabled,
+        colorAssist: this.colorAssistEnabled,
+      },
+      { persist: false, silent: true }
+    );
     this.applyGraphicsPreset(this.graphicsPreset, { persist: false, silent: true });
     this.syncTrackingConsentUi();
+    this.handleFullscreenChange();
     this.handleResize();
     this.resetRun({ seed: this.currentTrackSeed });
     this.openMenu({ canResume: false });
+    this.showAccessibilityPromptIfNeeded();
     this.loadLeaderboard();
     void this.registerTrackingSession();
   }
@@ -320,30 +362,138 @@ export class Game {
     window.addEventListener("keydown", this.handleKeyDown);
     window.addEventListener("keyup", this.handleKeyUp);
     document.addEventListener("visibilitychange", this.handleVisibility);
+    document.addEventListener("fullscreenchange", this.handleFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", this.handleFullscreenChange);
     this.clock.start();
     requestAnimationFrame(this.animate);
   }
 
   getTrackingConsentLabel() {
     if (this.trackingConsent === "accepted") {
-      return "Tracking allowed. Play runs and in-memory visitor details are available through the stats API.";
+      return "Tracking allowed. Play runs, the chosen driver name, and in-memory visitor details are available through the stats API.";
     }
 
     if (this.trackingConsent === "declined") {
-      return "Tracking declined. Drivvy will not record analytics, IP addresses, or browser details.";
+      return "Tracking declined. Drivvy will not record analytics, driver names, IP addresses, or browser details.";
     }
 
-    return "Tracking is undecided. Choose whether Drivvy may store a consent cookie and record run analytics.";
+    return "Tracking is undecided. Choose whether Drivvy may store a consent cookie and record run analytics including the chosen driver name.";
   }
 
   syncTrackingConsentUi() {
     this.hud.setTrackingStatus(this.getTrackingConsentLabel());
+    if (this.hud.isAccessibilityPromptVisible?.()) {
+      this.hud.hideTrackingConsent();
+      return;
+    }
     if (this.trackingConsent) {
       this.hud.hideTrackingConsent();
       return;
     }
 
     this.hud.showTrackingConsent();
+  }
+
+  getAccessibilityStatusLabel() {
+    if (this.highContrastEnabled && this.colorAssistEnabled) {
+      return "High contrast and color assist are active.";
+    }
+
+    if (this.highContrastEnabled) {
+      return "High contrast is active.";
+    }
+
+    if (this.colorAssistEnabled) {
+      return "Color assist is active.";
+    }
+
+    return "Standard visibility is active.";
+  }
+
+  applyAccessibilitySettings(
+    { highContrast = this.highContrastEnabled, colorAssist = this.colorAssistEnabled } = {},
+    { persist = true, silent = false } = {}
+  ) {
+    this.highContrastEnabled = Boolean(highContrast);
+    this.colorAssistEnabled = Boolean(colorAssist);
+    document.body.classList.toggle("theme-high-contrast", this.highContrastEnabled);
+    document.body.classList.toggle("theme-color-assist", this.colorAssistEnabled);
+    this.hud.setAccessibilitySettings({
+      highContrast: this.highContrastEnabled,
+      colorAssist: this.colorAssistEnabled,
+    });
+    this.hud.setAccessibilityStatus(this.getAccessibilityStatusLabel());
+
+    if (persist) {
+      writeStoredValue(HIGH_CONTRAST_STORAGE_KEY, this.highContrastEnabled ? "1" : "0");
+      writeStoredValue(COLOR_ASSIST_STORAGE_KEY, this.colorAssistEnabled ? "1" : "0");
+    }
+
+    if (!silent) {
+      this.hud.setMenuStatus(this.getAccessibilityStatusLabel());
+    }
+  }
+
+  toggleHighContrast() {
+    this.applyAccessibilitySettings({
+      highContrast: !this.highContrastEnabled,
+      colorAssist: this.colorAssistEnabled,
+    });
+  }
+
+  toggleColorAssist() {
+    this.applyAccessibilitySettings({
+      highContrast: this.highContrastEnabled,
+      colorAssist: !this.colorAssistEnabled,
+    });
+  }
+
+  showAccessibilityPrompt({ step = "name" } = {}) {
+    this.hud.showAccessibilityPrompt({ step });
+    this.hud.hideTrackingConsent();
+    if (step === "name") {
+      this.hud.focusOnboardingNameInput?.();
+    }
+  }
+
+  hideAccessibilityPrompt() {
+    this.hud.hideAccessibilityPrompt();
+    this.syncTrackingConsentUi();
+  }
+
+  showAccessibilityPromptIfNeeded() {
+    if (this.accessibilityPromptSeen) {
+      return;
+    }
+
+    const hasStoredName = Boolean(this.hud.getPlayerName().trim());
+    this.showAccessibilityPrompt({ step: hasStoredName ? "question" : "name" });
+  }
+
+  handleAccessibilityNameContinue() {
+    const trimmed = this.hud.getOnboardingName().replace(/\s+/g, " ").trim();
+    const name = trimmed.slice(0, 18) || "Guest";
+    this.hud.setPlayerName(name);
+    writeStoredValue(PLAYER_NAME_STORAGE_KEY, name);
+    this.showAccessibilityPrompt({ step: "question" });
+  }
+
+  handleAccessibilityPromptYes() {
+    this.applyAccessibilitySettings({ highContrast: true, colorAssist: true }, { silent: true });
+    this.showAccessibilityPrompt({ step: "setup" });
+  }
+
+  handleAccessibilityPromptNo() {
+    this.accessibilityPromptSeen = true;
+    writeStoredValue(ACCESSIBILITY_PROMPT_SEEN_STORAGE_KEY, "1");
+    this.hideAccessibilityPrompt();
+  }
+
+  handleAccessibilityPromptContinue() {
+    this.accessibilityPromptSeen = true;
+    writeStoredValue(ACCESSIBILITY_PROMPT_SEEN_STORAGE_KEY, "1");
+    this.hideAccessibilityPrompt();
+    this.hud.setMenuStatus(this.getAccessibilityStatusLabel());
   }
 
   setTrackingConsent(choice) {
@@ -388,10 +538,12 @@ export class Game {
       return;
     }
 
+    const name = this.capturePlayerName();
     void this.registerTrackingSession().then(() =>
       this.telemetryService.recordRun({
         sessionId: this.trackingSessionId,
         consent: true,
+        name,
         mode,
         trackSeed,
       }).catch(() => {})
@@ -451,6 +603,7 @@ export class Game {
     this.player.boostActive = false;
     this.pursuitState = { active: false, activeCount: 0, nearestGap: null };
     this.player.mesh.userData.setBoostActive?.(false, 0);
+    this.feedbackSystem.reset();
     this.resetCrashEffect();
 
     this.playerSample = this.track.placeAlongTrack(
@@ -476,6 +629,7 @@ export class Game {
     }
 
     this.capturePlayerName();
+    void this.feedbackSystem.unlockAudio();
     this.resetRun({ seed: this.createSoloSeed() });
     this.setViewMode("chase", { snap: true, resetLookBehind: true });
     this.player.speed = this.player.baseCruiseSpeed * 0.7;
@@ -496,6 +650,7 @@ export class Game {
     }
 
     this.capturePlayerName();
+    void this.feedbackSystem.unlockAudio();
     this.controlsHintTime = CONTROLS_HINT_DURATION;
     this.hud.setControlsVisible(true);
     this.menuCanResume = false;
@@ -674,6 +829,7 @@ export class Game {
   }
 
   update(delta) {
+    const previousPlayerS = this.player.s;
     this.input.update();
     this.routeTransitionTime = Math.max(0, this.routeTransitionTime - delta);
 
@@ -727,6 +883,7 @@ export class Game {
     this.updateCrashEffect(delta);
     this.updateCrashOverlay(delta);
     this.updateControlsHint(delta);
+    this.updateFeedback(delta, previousPlayerS);
     this.hud.update({
       speed: this.player.speed,
       distance: this.player.s,
@@ -738,6 +895,47 @@ export class Game {
       race: this.getRaceLabel(),
       assist: this.aiEnabled ? "Drive Assist" : "Manual",
     });
+  }
+
+  updateFeedback(delta, previousPlayerS) {
+    if (this.state === "running" && !this.hud.isMenuVisible()) {
+      this.playTrafficPassBySounds(previousPlayerS);
+    }
+
+    const policeGap =
+      this.multiplayer.mode === "solo" && this.pursuitState.active ? this.pursuitState.nearestGap : null;
+    this.feedbackSystem.update({
+      delta,
+      running: this.state === "running",
+      speed: this.player.speed,
+      boostActive: this.player.boostActive,
+      policeGap,
+    });
+  }
+
+  playTrafficPassBySounds(previousPlayerS) {
+    const activeRouteId = this.player.route.branchId || "main";
+
+    for (const vehicle of this.trafficSystem.vehicles) {
+      if (vehicle.routeId !== activeRouteId || vehicle.kind === "police") {
+        continue;
+      }
+
+      if (Math.abs(vehicle.laneOffset - this.player.laneOffset) > LANE_WIDTH * 1.35) {
+        continue;
+      }
+
+      if (this.player.s <= vehicle.s + 1.2 || previousPlayerS > vehicle.s + 3) {
+        continue;
+      }
+
+      if ((vehicle.lastPassSoundS ?? -Infinity) > this.player.s - 24) {
+        continue;
+      }
+
+      vehicle.lastPassSoundS = this.player.s;
+      this.feedbackSystem.playPassBy(Math.max(8, this.player.speed - vehicle.speed));
+    }
   }
 
   updateSolo(delta) {
@@ -1597,6 +1795,63 @@ export class Game {
     writeStoredValue(AUTOPILOT_STORAGE_KEY, nextValue ? "1" : "0");
   }
 
+  setVibrationEnabled(enabled) {
+    const supported = this.feedbackSystem.isVibrationSupported();
+    const nextValue = supported ? Boolean(enabled) : false;
+    this.feedbackSystem.setVibrationEnabled(nextValue);
+    this.hud.setVibrationEnabled(nextValue, supported);
+    writeStoredValue(VIBRATION_STORAGE_KEY, nextValue ? "1" : "0");
+    this.hud.setMenuStatus(
+      supported
+        ? `Vibration ${nextValue ? "enabled" : "disabled"}.`
+        : "Vibration is unavailable on this device."
+    );
+  }
+
+  isFullscreenSupported() {
+    return Boolean(
+      document.fullscreenEnabled ||
+        document.webkitFullscreenEnabled ||
+        document.documentElement.requestFullscreen ||
+        document.documentElement.webkitRequestFullscreen
+    );
+  }
+
+  getFullscreenElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement || null;
+  }
+
+  handleFullscreenChange() {
+    this.hud.setFullscreenActive(Boolean(this.getFullscreenElement()));
+  }
+
+  async toggleFullscreen() {
+    if (!this.isFullscreenSupported()) {
+      this.hud.setMenuStatus("Fullscreen is unavailable on this device.");
+      return;
+    }
+
+    void this.feedbackSystem.unlockAudio();
+
+    try {
+      if (this.getFullscreenElement()) {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        }
+      } else if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      } else if (document.documentElement.webkitRequestFullscreen) {
+        document.documentElement.webkitRequestFullscreen();
+      }
+    } catch (error) {
+      this.hud.setMenuStatus("Fullscreen is unavailable on this device.");
+    }
+
+    this.handleFullscreenChange();
+  }
+
   setGraphicsPreset(preset) {
     this.applyGraphicsPreset(preset);
   }
@@ -1608,6 +1863,7 @@ export class Game {
     this.renderer.setPixelRatio(this.getRenderPixelRatio());
     setVehicleFactoryQuality({ dynamicLights: this.graphics.dynamicVehicleLights });
     this.track.setQualityPreset(this.graphics.trackQuality);
+    this.trafficSystem.setQualityPreset(nextPreset);
     this.camera.far = this.graphics.cameraFar;
     this.camera.updateProjectionMatrix();
     this.rearCamera.far = this.graphics.cameraFar;
@@ -1642,14 +1898,14 @@ export class Game {
 
   getGraphicsPresetStatus() {
     if (this.graphicsPreset === "high") {
-      return "High restores the full city density, longer draw distance, dynamic vehicle lights, and the live rear-view mirror.";
+      return "High restores dense city scenery, the farthest draw distance, heavier traffic, dynamic vehicle lights, and the live rear-view mirror.";
     }
 
     if (this.graphicsPreset === "medium") {
-      return "Balanced keeps city detail trimmed and draw distance lower than High, but restores some clarity and effects.";
+      return "Balanced is the default. It keeps draw distance and traffic lighter, strips dense city blocks, and preserves better clarity than Low.";
     }
 
-    return "Low is the default for i5 / 8 GB / Intel integrated graphics. It cuts draw distance, strips dense city scenery, lowers render resolution, and disables dynamic vehicle lights and the live rear-view mirror.";
+    return "Low is the leanest preset. It cuts draw distance further, lowers render resolution, minimizes traffic pressure, and disables dynamic vehicle lights and the live rear-view mirror.";
   }
 
   pickNearestLaneTarget(candidateOffset, laneTargets, bounds) {
@@ -1839,6 +2095,7 @@ export class Game {
 
   async handleMultiplayerCreateLobby() {
     this.capturePlayerName();
+    void this.feedbackSystem.unlockAudio();
     this.hud.setMultiplayerStatus("Creating lobby...");
 
     try {
@@ -1856,6 +2113,7 @@ export class Game {
     }
 
     this.capturePlayerName();
+    void this.feedbackSystem.unlockAudio();
     this.hud.setMultiplayerStatus(`Joining ${lobbyCode}...`);
 
     try {
@@ -1866,6 +2124,7 @@ export class Game {
   }
 
   async handleMultiplayerToggleReady() {
+    void this.feedbackSystem.unlockAudio();
     try {
       await this.multiplayerClient.toggleReady();
     } catch (error) {
@@ -1874,6 +2133,7 @@ export class Game {
   }
 
   async handleMultiplayerStartRace() {
+    void this.feedbackSystem.unlockAudio();
     try {
       await this.multiplayerClient.startRace();
     } catch (error) {
@@ -1918,7 +2178,7 @@ export class Game {
     }
 
     if (message.canStart) {
-      this.hud.setMultiplayerStatus(`Lobby ${message.lobbyCode} is ready. Host can start.`);
+      this.hud.setMultiplayerStatus(`Lobby ${message.lobbyCode} is open. Host can start at any time.`);
       return;
     }
 
@@ -2000,7 +2260,7 @@ export class Game {
       ? `Finished P${placement.place}/${this.multiplayer.race.results.length}.`
       : "Race finished.";
 
-    this.hud.setMultiplayerStatus(`${resultLabel} Ready up for another sprint.`);
+    this.hud.setMultiplayerStatus(`${resultLabel} Ready up for another race.`);
     this.menuCanResume = false;
     this.state = "menu";
     this.input.resetState();

@@ -36,12 +36,16 @@
       </div>
 
       <div id="hud">
+        <button id="fullscreen-toggle" class="hud-float-button" type="button" aria-label="Toggle fullscreen">
+          Full Screen
+        </button>
+
         <div class="hud-panel hud-panel--title">
           <button id="menu-trigger" class="stealth-button" type="button" aria-label="Open game menu">
             <span class="hud-kicker">Procedural Chase</span>
             <h1>Drivvy</h1>
           </button>
-          <p class="hud-statusline">Esc opens the run menu.</p>
+          <p class="hud-statusline">Esc opens the menu.</p>
         </div>
 
         <div class="hud-panel hud-panel--stats">
@@ -73,16 +77,14 @@
         </div>
       </div>
 
-      <div id="menu-overlay" class="overlay overlay--menu">
-        <div class="overlay-card overlay-card--menu">
-          <button id="secret-menu-trigger" class="stealth-button secret-trigger" type="button">
-            <span class="hud-kicker">City To City Run</span>
-            <h2>Drivvy</h2>
-          </button>
+        <div id="menu-overlay" class="overlay overlay--menu">
+          <div class="overlay-card overlay-card--menu">
+            <button id="secret-menu-trigger" class="stealth-button secret-trigger" type="button">
+              <span class="hud-kicker">City To City Run</span>
+              <h2>Drivvy</h2>
+            </button>
 
-          <p class="menu-copy">
-            Chase distance through shifting weather and traffic.
-          </p>
+          <p class="menu-copy">Pick a mode and drive.</p>
 
           <div class="menu-mode" role="tablist" aria-label="Game mode">
             <button id="menu-solo-tab" class="mode-button is-active" type="button" data-mode="solo">Single Player</button>
@@ -92,8 +94,8 @@
             <button id="menu-options-tab" class="mode-button" type="button" data-mode="options">Options</button>
           </div>
 
-          <div id="solo-menu-panel" class="menu-panel">
-            <p class="menu-panel-copy">Stay ahead of traffic, hold speed, and chase a longer run.</p>
+          <div id="solo-menu-panel" class="menu-panel menu-panel--primary">
+            <p class="menu-panel-copy">Stay ahead of traffic. Distance is your score.</p>
             <div class="menu-actions">
               <button id="menu-play-button" type="button">Start Run</button>
               <button id="menu-new-run-button" type="button" class="ghost-button is-hidden">Fresh Run</button>
@@ -141,7 +143,7 @@
           <section id="options-menu-panel" class="menu-panel is-hidden" aria-labelledby="options-heading">
             <div class="menu-panel__head">
               <div>
-                <span class="hud-kicker">Run Setup</span>
+                <span class="hud-kicker">Quick Settings</span>
                 <h3 id="options-heading">Options</h3>
               </div>
             </div>
@@ -163,6 +165,30 @@
             <p id="graphics-preset-status" class="menu-copy menu-copy--compact">
               Balanced is the default preset.
             </p>
+
+            <div class="menu-field menu-field--stack">
+              <div class="secret-panel__header">
+                <span class="hud-label">Accessibility</span>
+                <button id="accessibility-review-button" type="button" class="ghost-button">Setup</button>
+              </div>
+              <div class="menu-actions menu-actions--tight">
+                <button id="high-contrast-button" type="button" class="ghost-button">High Contrast: Off</button>
+                <button id="color-assist-button" type="button" class="ghost-button">Color Assist: Off</button>
+              </div>
+              <p id="accessibility-status" class="menu-copy menu-copy--compact">
+                Standard visibility is active.
+              </p>
+            </div>
+
+            <div class="menu-field menu-field--stack">
+              <div class="secret-panel__header">
+                <span class="hud-label">Vibration</span>
+                <button id="vibration-toggle-button" type="button" class="ghost-button">Vibration: On</button>
+              </div>
+              <p class="menu-copy menu-copy--compact">
+                Pulses for police pressure and NOS on supported devices.
+              </p>
+            </div>
 
             <div class="menu-field menu-field--stack">
               <span class="hud-label">Tracking</span>
@@ -198,14 +224,55 @@
           <span class="hud-kicker">Privacy</span>
           <h2>Help improve Drivvy?</h2>
           <p>
-            If you allow tracking, Drivvy stores a consent cookie and records play-run analytics plus
-            in-memory visitor details such as IP address and browser user-agent. Declining keeps those
-            analytics off.
+            If you allow tracking, Drivvy stores a consent cookie and records play-run analytics including
+            your chosen driver name, plus in-memory visitor details such as IP address and browser
+            user-agent. Declining keeps those analytics off.
           </p>
         </div>
         <div class="consent-banner__actions">
           <button id="tracking-accept-button" type="button">Allow Tracking</button>
           <button id="tracking-decline-button" type="button" class="ghost-button">Decline</button>
+        </div>
+      </section>
+
+      <section id="accessibility-overlay" class="overlay is-hidden" role="dialog" aria-modal="true" aria-labelledby="accessibility-heading">
+        <div class="overlay-card overlay-card--accessibility">
+          <span class="hud-kicker">First Run</span>
+          <h2 id="accessibility-heading">Set up Drivvy</h2>
+          <p class="menu-copy">A couple of quick choices and you are ready to drive.</p>
+
+          <div id="accessibility-name-panel" class="accessibility-flow">
+            <label class="menu-field" for="onboarding-name-input">
+              <span class="hud-label">Driver Name</span>
+              <input id="onboarding-name-input" type="text" maxlength="18" placeholder="Guest" autocomplete="off" />
+            </label>
+            <div class="menu-actions">
+              <button id="accessibility-name-continue-button" type="button">Continue</button>
+            </div>
+          </div>
+
+          <div id="accessibility-question-panel" class="accessibility-flow is-hidden">
+            <p class="menu-copy">
+              If reading the HUD or menu is difficult, switch on clearer contrast or color-friendly cues now.
+            </p>
+            <div class="menu-actions menu-actions--stack">
+              <button id="accessibility-yes-button" type="button">Yes, help me set it up</button>
+              <button id="accessibility-no-button" type="button" class="ghost-button">No, use standard view</button>
+            </div>
+          </div>
+
+          <div id="accessibility-setup-panel" class="accessibility-flow is-hidden">
+            <div class="menu-actions menu-actions--tight">
+              <button id="accessibility-contrast-button" type="button" class="ghost-button">High Contrast: On</button>
+              <button id="accessibility-color-button" type="button" class="ghost-button">Color Assist: On</button>
+            </div>
+            <p class="menu-copy menu-copy--compact">
+              You can change these later in Options.
+            </p>
+            <div class="menu-actions">
+              <button id="accessibility-continue-button" type="button">Continue</button>
+            </div>
+          </div>
         </div>
       </section>
 
