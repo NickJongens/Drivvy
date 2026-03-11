@@ -23,18 +23,6 @@
         <div class="screen-fx__grain"></div>
       </div>
 
-      <div id="rearview-mirror" aria-hidden="true">
-        <div class="rearview-mirror__glass"></div>
-      </div>
-
-      <div id="cockpit-frame" aria-hidden="true">
-        <div class="cockpit-frame__roof"></div>
-        <div class="cockpit-frame__pillar cockpit-frame__pillar--left"></div>
-        <div class="cockpit-frame__pillar cockpit-frame__pillar--right"></div>
-        <div class="cockpit-frame__glass"></div>
-        <div class="cockpit-frame__dash"></div>
-      </div>
-
       <div id="hud">
         <div class="hud-panel hud-panel--title">
           <button id="menu-trigger" class="stealth-button" type="button" aria-label="Open game menu">
@@ -66,7 +54,7 @@
 
         <div id="controls-panel" class="hud-panel hud-panel--controls">
           <span class="hud-label">Controls</span>
-          <p>Steer, brake, boost. Press C for cockpit view. Menu opens pause.</p>
+          <p id="controls-message">WASD or arrows drive. Shift boosts. Esc opens the menu.</p>
         </div>
       </div>
 
@@ -78,6 +66,11 @@
             </button>
 
           <p class="menu-copy">Pick a mode and go.</p>
+
+          <label class="menu-field" for="player-name-input">
+            <span class="hud-label">Driver Name</span>
+            <input id="player-name-input" type="text" maxlength="18" placeholder="Guest" autocomplete="off" />
+          </label>
 
           <div class="menu-mode" role="tablist" aria-label="Game mode">
             <button id="menu-solo-tab" class="mode-button is-active" type="button" data-mode="solo">Solo</button>
@@ -148,11 +141,6 @@
                 <h3 id="options-heading">Options</h3>
               </div>
             </div>
-
-            <label class="menu-field" for="player-name-input">
-              <span class="hud-label">Driver Name</span>
-              <input id="player-name-input" type="text" maxlength="18" placeholder="Guest" autocomplete="off" />
-            </label>
 
             <label class="menu-field" for="graphics-preset-select">
               <span class="hud-label">Graphics Preset</span>

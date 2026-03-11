@@ -357,24 +357,6 @@ function buildPlayerSportsCar({
     [0.34, 0.76, -2.6],
   ]);
 
-  const cockpitAnchor = new THREE.Object3D();
-  cockpitAnchor.position.set(0, 1.62, 0.16);
-  group.add(cockpitAnchor);
-
-  const lookAheadAnchor = new THREE.Object3D();
-  lookAheadAnchor.position.set(0, 1.52, 10.5);
-  group.add(lookAheadAnchor);
-
-  const rearLookAnchor = new THREE.Object3D();
-  rearLookAnchor.position.set(0, 1.5, -10.5);
-  group.add(rearLookAnchor);
-
-  group.userData.cameraAnchors = {
-    cockpit: cockpitAnchor,
-    lookAhead: lookAheadAnchor,
-    rearLook: rearLookAnchor,
-  };
-
   return group;
 }
 
@@ -435,6 +417,17 @@ function buildSedanCar({ bodyColor, accentColor, cabinColor = 0xa9bdca } = {}) {
     [1.04, 0.38, 1.44],
     [-1.04, 0.38, -1.34],
     [1.04, 0.38, -1.34],
+  ]);
+
+  addSignals(group, materials.signal, [
+    { side: "left", x: -0.92, y: 0.98, z: 2.08 },
+    { side: "right", x: 0.92, y: 0.98, z: 2.08 },
+    { side: "left", x: -0.92, y: 0.98, z: -2.08 },
+    { side: "right", x: 0.92, y: 0.98, z: -2.08 },
+    { side: "left", x: -1.14, y: 1.02, z: 1.18 },
+    { side: "right", x: 1.14, y: 1.02, z: 1.18 },
+    { side: "left", x: -1.14, y: 1.02, z: -1.18 },
+    { side: "right", x: 1.14, y: 1.02, z: -1.18 },
   ]);
 
   attachNightLights(group, materials, headlights, tails, {
@@ -621,6 +614,17 @@ function buildBus() {
       rearIntensity: 0.8,
     }
   );
+
+  addSignals(group, materials.signal, [
+    { side: "left", x: -1.18, y: 1.46, z: 4.18 },
+    { side: "right", x: 1.18, y: 1.46, z: 4.18 },
+    { side: "left", x: -1.18, y: 1.34, z: -4.18 },
+    { side: "right", x: 1.18, y: 1.34, z: -4.18 },
+    { side: "left", x: -1.4, y: 1.52, z: 2.8 },
+    { side: "right", x: 1.4, y: 1.52, z: 2.8 },
+    { side: "left", x: -1.4, y: 1.48, z: -2.8 },
+    { side: "right", x: 1.4, y: 1.48, z: -2.8 },
+  ]);
 
   return group;
 }

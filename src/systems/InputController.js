@@ -8,6 +8,14 @@ export class InputController {
       right: false,
       brake: false,
       boost: false,
+      powerLeft: false,
+      powerRight: false,
+      powerGeneric: false,
+    };
+    this.actionPresses = {
+      powerLeft: false,
+      powerRight: false,
+      powerGeneric: false,
     };
     this.pointerState = {
       accelerate: false,
@@ -16,12 +24,17 @@ export class InputController {
     this.mouseX = 0;
     this.mouseActiveUntil = 0;
     this.activeGamepadIndex = null;
+    this.lastInputSource = "keyboard";
     this.gamepadState = {
       connected: false,
       steer: 0,
       throttle: 0,
       brake: 0,
       boost: 0,
+      powerLeftPressed: false,
+      powerLeftHeld: false,
+      powerRightPressed: false,
+      powerRightHeld: false,
       menuPressed: false,
       menuHeld: false,
     };
@@ -96,6 +109,51 @@ export class InputController {
     return true;
   }
 
+  consumePowerAction(action = "generic") {
+    if (action === "left") {
+      if (this.actionPresses.powerLeft) {
+        this.actionPresses.powerLeft = false;
+        return true;
+      }
+
+      if (!this.gamepadState.powerLeftPressed) {
+        return false;
+      }
+
+      this.gamepadState.powerLeftPressed = false;
+      return true;
+    }
+
+    if (action === "right") {
+      if (this.actionPresses.powerRight) {
+        this.actionPresses.powerRight = false;
+        return true;
+      }
+
+      if (!this.gamepadState.powerRightPressed) {
+        return false;
+      }
+
+      this.gamepadState.powerRightPressed = false;
+      return true;
+    }
+
+    if (this.actionPresses.powerGeneric) {
+      this.actionPresses.powerGeneric = false;
+      return true;
+    }
+
+    return false;
+  }
+
+  getLastInputSource() {
+    return this.lastInputSource;
+  }
+
+  isGamepadActive() {
+    return this.gamepadState.connected && this.lastInputSource === "gamepad";
+  }
+
   hasThrottleInput() {
     return this.getThrottle() > 0;
   }
@@ -115,10 +173,20 @@ export class InputController {
     this.keyState.right = false;
     this.keyState.brake = false;
     this.keyState.boost = false;
+    this.keyState.powerLeft = false;
+    this.keyState.powerRight = false;
+    this.keyState.powerGeneric = false;
+    this.actionPresses.powerLeft = false;
+    this.actionPresses.powerRight = false;
+    this.actionPresses.powerGeneric = false;
     this.pointerState.accelerate = false;
     this.pointerState.brake = false;
     this.mouseActiveUntil = 0;
     this.mouseX = 0;
+    this.gamepadState.powerLeftPressed = false;
+    this.gamepadState.powerLeftHeld = false;
+    this.gamepadState.powerRightPressed = false;
+    this.gamepadState.powerRightHeld = false;
   }
 
   update() {
@@ -130,6 +198,7 @@ export class InputController {
     const normalized = ((event.clientX - bounds.left) / Math.max(bounds.width, 1)) * 2 - 1;
     this.mouseX = Math.max(-1, Math.min(1, normalized));
     this.mouseActiveUntil = performance.now() + 1400;
+    this.lastInputSource = "mouse";
   }
 
   handleMouseLeave() {
@@ -140,11 +209,13 @@ export class InputController {
     if (event.button === 0) {
       event.preventDefault();
       this.pointerState.accelerate = true;
+      this.lastInputSource = "mouse";
     }
 
     if (event.button === 2) {
       event.preventDefault();
       this.pointerState.brake = true;
+      this.lastInputSource = "mouse";
     }
   }
 
@@ -171,6 +242,7 @@ export class InputController {
     if (this.isControlKey(event.key)) {
       event.preventDefault();
     }
+    this.lastInputSource = "keyboard";
     this.setKey(event.key, true);
   }
 
@@ -217,6 +289,10 @@ export class InputController {
     this.gamepadState.throttle = 0;
     this.gamepadState.brake = 0;
     this.gamepadState.boost = 0;
+    this.gamepadState.powerLeftPressed = false;
+    this.gamepadState.powerLeftHeld = false;
+    this.gamepadState.powerRightPressed = false;
+    this.gamepadState.powerRightHeld = false;
     this.gamepadState.menuPressed = false;
     this.gamepadState.menuHeld = false;
   }
@@ -238,6 +314,7 @@ export class InputController {
     const signalledPad = pads.find((pad) => this.gamepadHasSignal(pad));
     if (signalledPad) {
       activePad = signalledPad;
+      this.lastInputSource = "gamepad";
     } else if (!activePad) {
       activePad = pads[0];
     }
@@ -264,10 +341,10 @@ export class InputController {
     );
     const boost = Math.max(
       this.getButtonValue(activePad, 2),
-      this.getButtonValue(activePad, 3),
-      this.getButtonValue(activePad, 4),
-      this.getButtonValue(activePad, 5)
+      this.getButtonValue(activePad, 3)
     );
+    const powerLeftDown = this.getButtonValue(activePad, 4) > 0.5;
+    const powerRightDown = this.getButtonValue(activePad, 5) > 0.5;
     const menuDown = [8, 9, 16].some((index) => this.getButtonValue(activePad, index) > 0.5);
 
     this.gamepadState.connected = true;
@@ -275,6 +352,10 @@ export class InputController {
     this.gamepadState.throttle = Math.max(0, Math.min(1, throttle));
     this.gamepadState.brake = Math.max(0, Math.min(1, brake));
     this.gamepadState.boost = Math.max(0, Math.min(1, boost));
+    this.gamepadState.powerLeftPressed = powerLeftDown && !this.gamepadState.powerLeftHeld;
+    this.gamepadState.powerLeftHeld = powerLeftDown;
+    this.gamepadState.powerRightPressed = powerRightDown && !this.gamepadState.powerRightHeld;
+    this.gamepadState.powerRightHeld = powerRightDown;
     this.gamepadState.menuPressed = menuDown && !this.gamepadState.menuHeld;
     this.gamepadState.menuHeld = menuDown;
   }
@@ -331,6 +412,27 @@ export class InputController {
     if (key === " " || key === "Spacebar" || lowerKey === "shift") {
       this.keyState.boost = nextValue;
     }
+
+    if (lowerKey === "q") {
+      if (nextValue && !this.keyState.powerLeft) {
+        this.actionPresses.powerLeft = true;
+      }
+      this.keyState.powerLeft = nextValue;
+    }
+
+    if (lowerKey === "e") {
+      if (nextValue && !this.keyState.powerRight) {
+        this.actionPresses.powerRight = true;
+      }
+      this.keyState.powerRight = nextValue;
+    }
+
+    if (key === "Enter") {
+      if (nextValue && !this.keyState.powerGeneric) {
+        this.actionPresses.powerGeneric = true;
+      }
+      this.keyState.powerGeneric = nextValue;
+    }
   }
 
   isControlKey(key) {
@@ -341,6 +443,8 @@ export class InputController {
       lowerKey === "d" ||
       lowerKey === "s" ||
       lowerKey === "shift" ||
+      lowerKey === "q" ||
+      lowerKey === "e" ||
       key === " " ||
       key === "Spacebar" ||
       key === "ArrowUp" ||

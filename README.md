@@ -2,6 +2,8 @@
 
 Procedural Three.js browser racing game with a Docker-first Node server, local file-backed high scores, multiplayer lobbies, and consent-gated telemetry.
 
+![Drivvy screenshot](https://github.com/NickJongens/Drivvy/blob/main/Screenshot.jpg?raw=1)
+
 ## Run With Docker
 
 Published image:

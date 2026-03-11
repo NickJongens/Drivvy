@@ -15,7 +15,6 @@ import { LANE_WIDTH, TrackManager } from "./world/TrackManager.js";
 
 const CAMERA_LAG = 5.5;
 const LOOK_LAG = 6.5;
-const FPV_CAMERA_LAG = 8.5;
 const CONTROLS_HINT_DURATION = 7;
 const MAIN_LANE_OFFSETS = [-LANE_WIDTH, 0, LANE_WIDTH];
 const LANE_OCCUPANCY_THRESHOLD = LANE_WIDTH * 0.58;
@@ -30,9 +29,9 @@ const COLOR_ASSIST_STORAGE_KEY = "drivvy.colorAssist";
 const LEGACY_AUTOPILOT_STORAGE_KEY = "polySprint.autopilot";
 const LEGACY_PLAYER_NAME_STORAGE_KEY = "polySprint.playerName";
 const LEGACY_SECRET_STORAGE_KEY = "polySprint.secretMenu";
-const MULTIPLAYER_SEND_INTERVAL = 0.1;
+const MULTIPLAYER_SEND_INTERVAL = 0.08;
 const MULTIPLAYER_TARGET_DISTANCE = 6000;
-const MULTIPLAYER_ROLLING_SPEED = 15;
+const MULTIPLAYER_ROLLING_SPEED = 32;
 const GRAPHICS_PRESETS = {
   low: {
     label: "Low",
@@ -123,10 +122,8 @@ function normalizeGraphicsPreset(value) {
 }
 
 export class Game {
-  constructor({ mount, hudElements, rearMirrorFrame = null, cockpitFrame = null }) {
+  constructor({ mount, hudElements }) {
     this.mount = mount;
-    this.rearMirrorFrame = rearMirrorFrame;
-    this.cockpitFrame = cockpitFrame;
     this.hud = new Hud(hudElements);
     this.leaderboardService = new LeaderboardService();
     this.telemetryService = new TelemetryService();
@@ -157,7 +154,6 @@ export class Game {
 
     this.camera = new THREE.PerspectiveCamera(65, 1, 0.1, 1800);
     this.camera.position.set(0, 8, -12);
-    this.rearCamera = new THREE.PerspectiveCamera(58, 1, 0.1, 1800);
 
     this.skyLight = new THREE.HemisphereLight(0xd9efff, 0x304534, 1.35);
     this.sunLight = new THREE.DirectionalLight(0xffefcf, 1.1);
@@ -203,17 +199,12 @@ export class Game {
 
     this.clock = new THREE.Clock();
     this.cameraLookAt = new THREE.Vector3();
-    this.rearCameraLookAt = new THREE.Vector3();
     this.cameraUp = new THREE.Vector3();
     this.cameraForward = new THREE.Vector3();
     this.cameraRight = new THREE.Vector3();
     this.cameraTarget = new THREE.Vector3();
     this.lookTarget = new THREE.Vector3();
     this.tempQuaternion = new THREE.Quaternion();
-    this.anchorWorldA = new THREE.Vector3();
-    this.anchorWorldB = new THREE.Vector3();
-    this.surfaceUp = new THREE.Vector3();
-    this.lookSurfaceUp = new THREE.Vector3();
     this.playerSample = this.track.sample(0, 0);
     this.laneState = this.track.getLaneState(0, 0, this.player.route);
     this.weather = this.weatherSystem.getCurrent();
@@ -223,6 +214,7 @@ export class Game {
     this.pursuitState = { active: false, activeCount: 0, nearestGap: null };
     this.crashOverlayDelay = 0;
     this.crashDistance = 0;
+    this.crashMotion = this.createCrashMotionState();
     this.controlsHintTime = 0;
     this.multiplayerTrafficPenaltyTime = 0;
     this.hasRunStarted = false;
@@ -234,7 +226,6 @@ export class Game {
     this.trackingSessionId = this.trackingConsent === "accepted" ? this.trackingConsentService.getSessionId() : "";
     this.trackingSessionRegistered = false;
     this.currentTrackSeed = this.createSoloSeed();
-    this.viewMode = "chase";
     this.lookBehindActive = false;
     this.attractTime = 0;
 
@@ -259,6 +250,16 @@ export class Game {
       lastRaceState: null,
       waitingLobbies: [],
       status: "Online mode unavailable.",
+      powerups: {
+        clear: {
+          cooldown: 0,
+          activeTime: 0,
+        },
+        turbo: {
+          cooldown: 0,
+          activeTime: 0,
+        },
+      },
     };
 
     this.handleResize = this.handleResize.bind(this);
@@ -358,6 +359,7 @@ export class Game {
     this.hud.setPlayerName(readStoredValue(PLAYER_NAME_STORAGE_KEY, "", LEGACY_PLAYER_NAME_STORAGE_KEY));
     this.hud.setMultiplayerStatus(this.multiplayer.status);
     this.hud.setControlsVisible(true);
+    this.hud.setControlsText?.(this.getAdaptiveControlsText());
     this.applyAccessibilitySettings(
       {
         highContrast: this.highContrastEnabled,
@@ -645,6 +647,8 @@ export class Game {
     this.player.mesh.userData.setBoostActive?.(false, 0);
     this.feedbackSystem.reset();
     this.resetCrashEffect();
+    this.resetCrashMotion();
+    this.resetMultiplayerPowerups();
 
     this.playerSample = this.track.placeAlongTrack(
       this.player.mesh,
@@ -672,7 +676,8 @@ export class Game {
     this.capturePlayerName();
     void this.feedbackSystem.unlockAudio();
     this.resetRun({ seed: this.createSoloSeed() });
-    this.setViewMode("chase", { snap: true, resetLookBehind: true });
+    this.lookBehindActive = false;
+    this.snapCameraToCurrentView();
     this.player.speed = this.player.baseCruiseSpeed * 0.7;
     this.controlsHintTime = CONTROLS_HINT_DURATION;
     this.hud.setControlsVisible(true);
@@ -721,6 +726,9 @@ export class Game {
       aiEnabled: this.aiEnabled,
       mode: this.multiplayer.mode,
     });
+    if (!this.hud.getPlayerName().trim()) {
+      this.hud.focusNameInput?.();
+    }
     this.syncTrackingConsentUi();
 
     if (this.multiplayer.mode === "multiplayer") {
@@ -814,8 +822,6 @@ export class Game {
     const height = window.innerHeight;
     this.camera.aspect = width / Math.max(height, 1);
     this.camera.updateProjectionMatrix();
-    this.rearCamera.aspect = width / Math.max(height, 1);
-    this.rearCamera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
   }
 
@@ -826,12 +832,6 @@ export class Game {
     if (event.key === "Escape") {
       event.preventDefault();
       this.handleMenuToggleRequest();
-      return;
-    }
-
-    if (!typingTarget && lowerKey === "c" && !event.repeat) {
-      event.preventDefault();
-      this.setViewMode(this.viewMode === "fpv" ? "chase" : "fpv", { snap: true, resetLookBehind: true });
       return;
     }
 
@@ -887,6 +887,9 @@ export class Game {
     if (this.input.consumeMenuPress()) {
       this.handleMenuToggleRequest();
     }
+    if (this.state === "running" && this.isMultiplayerRaceActive()) {
+      this.handleMultiplayerPowerupInput();
+    }
     this.routeTransitionTime = Math.max(0, this.routeTransitionTime - delta);
 
     if (this.state === "running") {
@@ -902,6 +905,8 @@ export class Game {
         this.track.ensure(this.player.s, this.player.route);
         this.trafficSystem.update(delta * 0.75, this.player, this.weather);
         this.scenerySystem.update(delta, this.player.s, this.player.route);
+      } else if (this.state === "crashed") {
+        this.updateCrashMotion(delta);
       } else if (this.multiplayer.mode === "multiplayer") {
         this.weather = { ...MULTIPLAYER_CLEAR_WEATHER };
         this.track.ensure(this.player.s, this.player.route);
@@ -917,6 +922,9 @@ export class Game {
         -this.player.steerVisual * 0.18,
         this.player.route
       );
+      if (this.state === "crashed") {
+        this.applyCrashPose();
+      }
 
       this.player.mesh.userData.setBoostActive?.(false, 0);
     }
@@ -934,7 +942,6 @@ export class Game {
     );
     this.player.mesh.userData.setNightLights?.(nightLevel > 0.08, nightLevel);
     this.updateCamera(delta);
-    this.updateRearMirrorState();
     this.updateSkyAccent();
     this.updateCrashEffect(delta);
     this.updateCrashOverlay(delta);
@@ -1021,6 +1028,7 @@ export class Game {
 
   updateMultiplayer(delta) {
     this.weather = { ...MULTIPLAYER_CLEAR_WEATHER };
+    this.updateMultiplayerPowerups(delta);
     const countdownSeconds = Math.max(0, (this.multiplayer.race.startAt - Date.now()) / 1000);
 
     if (countdownSeconds <= 0) {
@@ -1050,6 +1058,8 @@ export class Game {
     }, {
       allowPolice: false,
       allowRacers: false,
+      priorityVehicles: this.getPriorityRaceVehicles(),
+      roadClearActive: this.multiplayer.powerups.clear.activeTime > 0,
     });
     this.scenerySystem.update(delta, this.player.s, this.player.route);
     this.updateRemotePlayers(delta);
@@ -1106,7 +1116,11 @@ export class Game {
     const wantsBoost =
       !this.hud.isMenuVisible() &&
       this.player.nosCharge > 0 &&
-      (this.input.getBoost() > 0 || (this.aiEnabled && this.pursuitState.active && this.player.nosCharge > 28));
+      (
+        this.input.getBoost() > 0 ||
+        this.multiplayer.powerups.turbo.activeTime > 0 ||
+        (this.aiEnabled && this.pursuitState.active && this.player.nosCharge > 28)
+      );
     const boostDrain = wantsBoost ? Math.min(this.player.nosCharge, delta * 30) : 0;
     const boostRatio = boostDrain / Math.max(delta * 30, 0.0001);
     this.player.nosCharge = Math.max(0, this.player.nosCharge - boostDrain);
@@ -1205,6 +1219,7 @@ export class Game {
   }
 
   updateControlsHint(delta) {
+    this.hud.setControlsText?.(this.getAdaptiveControlsText());
     if (this.state !== "running") {
       this.hud.setControlsVisible(true);
       return;
@@ -1217,6 +1232,29 @@ export class Game {
     }
 
     this.hud.setControlsVisible(false);
+  }
+
+  getAdaptiveControlsText() {
+    const gamepad = this.input.isGamepadActive();
+    const inMultiplayerRace = this.isMultiplayerRaceActive();
+
+    if (gamepad) {
+      if (inMultiplayerRace) {
+        return "Stick steers. RT drives. LT brakes. X or Y boosts. LB clears traffic. RB triggers turbo. Menu pauses.";
+      }
+
+      return "Stick steers. RT drives. LT brakes. X or Y boosts. Menu pauses.";
+    }
+
+    if (inMultiplayerRace) {
+      return "WASD or arrows drive. Shift boosts. Enter uses race power. Q clears traffic. E triggers turbo. Esc pauses.";
+    }
+
+    if (this.input.getLastInputSource?.() === "mouse") {
+      return "Move the mouse to steer. Left click drives. Right click brakes. Shift boosts. Esc opens the menu.";
+    }
+
+    return "WASD or arrows drive. Shift boosts. Esc opens the menu.";
   }
 
   getAutoPilotCommand(bounds, weather) {
@@ -1332,8 +1370,8 @@ export class Game {
   }
 
   updateCamera(delta) {
-    const { fpv, routeBoost, targetFov } = this.populateCameraRig();
-    const cameraAlpha = 1 - Math.exp(-((fpv ? FPV_CAMERA_LAG : CAMERA_LAG) * routeBoost) * delta);
+    const { routeBoost, targetFov } = this.populateCameraRig();
+    const cameraAlpha = 1 - Math.exp(-(CAMERA_LAG * routeBoost) * delta);
     const lookAlpha = 1 - Math.exp(-(LOOK_LAG * routeBoost) * delta);
 
     this.camera.position.lerp(this.cameraTarget, cameraAlpha);
@@ -1343,88 +1381,10 @@ export class Game {
     this.camera.lookAt(this.cameraLookAt);
   }
 
-  updateRearMirrorState() {
-    const cockpitVisible = this.state === "running" && this.viewMode === "fpv" && !this.hud.isMenuVisible();
-    this.rearMirrorFrame?.classList.toggle("is-active", cockpitVisible && this.graphics.rearMirror);
-    this.cockpitFrame?.classList.toggle("is-active", cockpitVisible);
-  }
-
   renderFrame() {
-    const hidePlayerBody = this.viewMode === "fpv";
-    this.player.mesh.visible = !hidePlayerBody;
-
     this.renderer.setScissorTest(false);
     this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
-
-    if (this.shouldRenderRearMirror()) {
-      this.renderRearMirror();
-    }
-
-    this.player.mesh.visible = true;
-  }
-
-  shouldRenderRearMirror() {
-    return Boolean(
-      this.graphics.rearMirror &&
-      this.rearMirrorFrame &&
-      this.state === "running" &&
-      this.viewMode === "fpv" &&
-      !this.hud.isMenuVisible()
-    );
-  }
-
-  renderRearMirror() {
-    const canvas = this.renderer.domElement;
-    const canvasRect = canvas.getBoundingClientRect();
-    const mirrorRect = this.rearMirrorFrame.getBoundingClientRect();
-    const widthScale = canvas.width / Math.max(canvasRect.width, 1);
-    const heightScale = canvas.height / Math.max(canvasRect.height, 1);
-    const left = Math.max(0, Math.round((mirrorRect.left - canvasRect.left) * widthScale));
-    const bottom = Math.max(0, Math.round((canvasRect.bottom - mirrorRect.bottom) * heightScale));
-    const width = Math.max(1, Math.round(mirrorRect.width * widthScale));
-    const height = Math.max(1, Math.round(mirrorRect.height * heightScale));
-
-    this.player.mesh.updateWorldMatrix(true, false);
-    this.player.mesh.getWorldQuaternion(this.tempQuaternion);
-    this.cameraForward.set(0, 0, 1).applyQuaternion(this.tempQuaternion).normalize();
-    this.cameraUp.set(0, 1, 0).applyQuaternion(this.tempQuaternion).normalize();
-
-    const cameraAnchors = this.player.mesh.userData.cameraAnchors;
-    const mirrorOrigin = cameraAnchors?.cockpit?.getWorldPosition(this.anchorWorldA) ?? this.anchorWorldA
-      .copy(this.playerSample.position)
-      .addScaledVector(this.cameraForward, 0.32)
-      .addScaledVector(this.cameraUp, 1.78);
-    const rearSample = this.track.sample(this.player.s - 34, this.player.laneOffset, this.player.route);
-    const rearTarget = this.anchorWorldB
-      .copy(rearSample.position)
-      .addScaledVector(this.cameraUp, 1.48);
-
-    this.rearCamera.position.copy(mirrorOrigin);
-    this.rearCameraLookAt.copy(rearTarget);
-    this.rearCamera.aspect = width / Math.max(height, 1);
-    this.rearCamera.fov = 58;
-    this.rearCamera.updateProjectionMatrix();
-    this.rearCamera.lookAt(this.rearCameraLookAt);
-
-    this.renderer.clearDepth();
-    this.renderer.setScissorTest(true);
-    this.renderer.setViewport(left, bottom, width, height);
-    this.renderer.setScissor(left, bottom, width, height);
-    this.renderer.render(this.scene, this.rearCamera);
-    this.renderer.setScissorTest(false);
-    this.renderer.setViewport(0, 0, canvas.width, canvas.height);
-  }
-
-  setViewMode(mode, { snap = false, resetLookBehind = false } = {}) {
-    this.viewMode = mode === "fpv" ? "fpv" : "chase";
-    if (resetLookBehind) {
-      this.lookBehindActive = false;
-    }
-
-    if (snap) {
-      this.snapCameraToCurrentView();
-    }
   }
 
   populateCameraRig() {
@@ -1433,10 +1393,8 @@ export class Game {
     this.cameraForward.set(0, 0, 1).applyQuaternion(this.tempQuaternion).normalize();
     this.cameraRight.set(1, 0, 0).applyQuaternion(this.tempQuaternion).normalize();
     this.cameraUp.set(0, 1, 0).applyQuaternion(this.tempQuaternion).normalize();
-    this.camera.up.set(0, 1, 0);
     const speedFactor = THREE.MathUtils.clamp(this.player.speed / Math.max(this.player.baseMaxSpeed, 0.001), 0, 1);
     const lookingBack = this.lookBehindActive;
-    const fpv = this.viewMode === "fpv";
     const cinematic = !this.hasRunStarted && this.multiplayer.mode === "solo";
     const routeBoost = cinematic ? 1.2 : this.routeTransitionTime > 0 ? 1.9 : 1;
     let targetFov = 63.5;
@@ -1457,7 +1415,7 @@ export class Game {
         .addScaledVector(this.cameraUp, 2.7);
 
       targetFov = 66.5 + Math.abs(orbit) * 1.8;
-      return { fpv: false, routeBoost, targetFov };
+      return { routeBoost, targetFov };
     }
 
     if (this.isMultiplayerRaceCountdownActive()) {
@@ -1479,38 +1437,7 @@ export class Game {
         .addScaledVector(this.cameraUp, 2.6);
 
       targetFov = 66 - countdownFactor * 2;
-      return { fpv: false, routeBoost: 1.25, targetFov };
-    }
-
-    if (fpv) {
-      const headBob = Math.sin(performance.now() * 0.007 + this.player.speed * 0.08) * (0.01 + speedFactor * 0.035);
-      const laneLookSample = this.track.sample(
-        this.player.s + (lookingBack ? -28 : 40),
-        this.player.laneOffset,
-        this.player.route
-      );
-      this.surfaceUp.crossVectors(this.playerSample.tangent, this.playerSample.right).normalize();
-      this.lookSurfaceUp.crossVectors(laneLookSample.tangent, laneLookSample.right).normalize();
-      this.camera.up.copy(this.surfaceUp);
-
-      const cockpitAnchor = this.anchorWorldA
-        .copy(this.playerSample.position)
-        .addScaledVector(this.playerSample.tangent, 0.42)
-        .addScaledVector(this.surfaceUp, 1.6);
-      const lookAnchor = this.anchorWorldB
-        .copy(laneLookSample.position)
-        .addScaledVector(this.lookSurfaceUp, 1.44);
-      this.cameraTarget
-        .copy(cockpitAnchor)
-        .addScaledVector(this.surfaceUp, headBob);
-
-      this.lookTarget
-        .copy(lookAnchor)
-        .addScaledVector(laneLookSample.right, this.player.steerVisual * (lookingBack ? -0.2 : 0.24))
-        .addScaledVector(this.lookSurfaceUp, headBob * 0.35);
-
-      targetFov = 76.5 + speedFactor * 2.4 + (this.player.boostActive ? 2.8 : 0);
-      return { fpv, routeBoost, targetFov };
+      return { routeBoost: 1.25, targetFov };
     }
 
     if (lookingBack) {
@@ -1527,7 +1454,7 @@ export class Game {
         .addScaledVector(this.cameraUp, 2.4);
 
       targetFov = 64.5;
-      return { fpv, routeBoost, targetFov };
+      return { routeBoost, targetFov };
     }
 
     this.cameraTarget
@@ -1543,7 +1470,7 @@ export class Game {
       .addScaledVector(this.cameraUp, 2.8);
 
     targetFov = 63.5 + speedFactor * 2.1 + (this.player.boostActive ? 4.8 : 0);
-    return { fpv, routeBoost, targetFov };
+    return { routeBoost, targetFov };
   }
 
   snapCameraToCurrentView() {
@@ -1561,6 +1488,9 @@ export class Game {
 
     const startLine = this.createRaceMarker();
     const finishLine = this.createRaceMarker();
+    finishLine.add(this.createFinishGate());
+    finishLine.add(this.createCrowdSection(-1));
+    finishLine.add(this.createCrowdSection(1));
     group.add(startLine, finishLine);
 
     return {
@@ -1573,12 +1503,118 @@ export class Game {
   createRaceMarker() {
     const group = new THREE.Group();
     const mesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(LANE_WIDTH * 3.6, 3.8),
+      new THREE.PlaneGeometry(LANE_WIDTH * 4, 5.2),
       this.getRaceMarkerMaterial()
     );
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.y = 0.05;
     group.add(mesh);
+    return group;
+  }
+
+  createFinishGate() {
+    const gate = new THREE.Group();
+    const postMaterial = new THREE.MeshStandardMaterial({
+      color: 0xf4f6fb,
+      flatShading: true,
+      metalness: 0.08,
+      roughness: 0.46,
+    });
+    const trimMaterial = new THREE.MeshStandardMaterial({
+      color: 0x111418,
+      emissive: 0xffffff,
+      emissiveIntensity: 0.08,
+      flatShading: true,
+    });
+
+    for (const side of [-1, 1]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.9, 5.4, 0.9), postMaterial);
+      post.position.set(side * (LANE_WIDTH * 1.8), 2.7, 0);
+      gate.add(post);
+
+      const foot = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.45, 1.4), trimMaterial);
+      foot.position.set(side * (LANE_WIDTH * 1.8), 0.22, 0);
+      gate.add(foot);
+    }
+
+    const arch = new THREE.Mesh(new THREE.BoxGeometry(LANE_WIDTH * 4.2, 0.9, 1.1), trimMaterial);
+    arch.position.set(0, 5.35, 0);
+    gate.add(arch);
+
+    const banner = new THREE.Mesh(
+      new THREE.PlaneGeometry(LANE_WIDTH * 3.3, 1.35),
+      this.getFinishBannerMaterial()
+    );
+    banner.position.set(0, 4.35, 0.56);
+    gate.add(banner);
+
+    for (const side of [-1, 1]) {
+      const flag = new THREE.Mesh(
+        new THREE.BoxGeometry(0.18, 1.7, 0.18),
+        trimMaterial
+      );
+      flag.position.set(side * (LANE_WIDTH * 1.55), 6.4, 0);
+      gate.add(flag);
+
+      const pennant = new THREE.Mesh(
+        new THREE.BoxGeometry(0.85, 0.48, 0.08),
+        new THREE.MeshStandardMaterial({
+          color: side < 0 ? 0xff5f5f : 0xffd166,
+          emissive: side < 0 ? 0xff7373 : 0xffd166,
+          emissiveIntensity: 0.18,
+          flatShading: true,
+        })
+      );
+      pennant.position.set(side * (LANE_WIDTH * 1.38), 6.1, 0);
+      gate.add(pennant);
+    }
+
+    return gate;
+  }
+
+  createCrowdSection(side = 1) {
+    const group = new THREE.Group();
+    group.position.set(side * (LANE_WIDTH * 2.6), 0, 0);
+
+    const barrierMaterial = new THREE.MeshStandardMaterial({
+      color: 0xd6dee6,
+      flatShading: true,
+      roughness: 0.54,
+    });
+    const personPalette = [0xff6b57, 0x2ec4b6, 0xffd166, 0x6ea8ff, 0xffffff, 0x8bd450];
+
+    const barrier = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.6, 18), barrierMaterial);
+    barrier.position.set(side * 0.32, 0.35, 0);
+    group.add(barrier);
+
+    for (let index = 0; index < 11; index += 1) {
+      const spectator = new THREE.Group();
+      const shirtMaterial = new THREE.MeshStandardMaterial({
+        color: personPalette[index % personPalette.length],
+        flatShading: true,
+      });
+      const headMaterial = new THREE.MeshStandardMaterial({
+        color: 0xf1c7a7,
+        flatShading: true,
+      });
+
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.72, 0.24), shirtMaterial);
+      body.position.y = 1.08;
+      spectator.add(body);
+
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.28, 0.28), headMaterial);
+      head.position.y = 1.62;
+      spectator.add(head);
+
+      spectator.position.set(
+        side * (1.35 + (index % 2) * 0.35),
+        0,
+        -7.8 + index * 1.55
+      );
+      spectator.rotation.y = side < 0 ? Math.PI * 0.18 : -Math.PI * 0.18;
+      group.add(spectator);
+    }
+
     return group;
   }
 
@@ -1621,6 +1657,45 @@ export class Game {
       opacity: 0.95,
     });
     return this.raceMarkerMaterial;
+  }
+
+  getFinishBannerMaterial() {
+    if (this.finishBannerMaterial) {
+      return this.finishBannerMaterial;
+    }
+
+    if (typeof document === "undefined") {
+      this.finishBannerMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      return this.finishBannerMaterial;
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 128;
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      this.finishBannerMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      return this.finishBannerMaterial;
+    }
+
+    context.fillStyle = "#0e1114";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = "#f7f3e7";
+    context.fillRect(12, 12, canvas.width - 24, canvas.height - 24);
+    context.fillStyle = "#111418";
+    context.font = "bold 64px sans-serif";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText("FINISH", canvas.width * 0.5, canvas.height * 0.52);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    this.finishBannerMaterial = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+    });
+    return this.finishBannerMaterial;
   }
 
   updateMultiplayerRaceMarkers() {
@@ -1794,6 +1869,27 @@ export class Game {
     };
   }
 
+  createCrashMotionState() {
+    return {
+      active: false,
+      time: 0,
+      forwardSpeed: 0,
+      lateralSpeed: 0,
+      roll: 0,
+      pitch: 0,
+      yaw: 0,
+      rollVelocity: 0,
+      pitchVelocity: 0,
+      yawVelocity: 0,
+      lift: 0,
+      liftVelocity: 0,
+    };
+  }
+
+  resetCrashMotion() {
+    this.crashMotion = this.createCrashMotionState();
+  }
+
   resetCrashEffect() {
     this.crashEffect.active = false;
     this.crashEffect.time = 0;
@@ -1876,6 +1972,44 @@ export class Game {
     }
   }
 
+  updateCrashMotion(delta) {
+    if (!this.crashMotion.active) {
+      return;
+    }
+
+    this.crashMotion.time += delta;
+    this.player.s += this.crashMotion.forwardSpeed * delta;
+    this.player.laneOffset += this.crashMotion.lateralSpeed * delta;
+    this.player.targetLaneOffset = this.player.laneOffset;
+
+    this.crashMotion.forwardSpeed *= Math.exp(-delta * 2.6);
+    this.crashMotion.lateralSpeed *= Math.exp(-delta * 3.5);
+    this.crashMotion.roll += this.crashMotion.rollVelocity * delta;
+    this.crashMotion.pitch += this.crashMotion.pitchVelocity * delta;
+    this.crashMotion.yaw += this.crashMotion.yawVelocity * delta;
+    this.crashMotion.lift += this.crashMotion.liftVelocity * delta;
+    this.crashMotion.rollVelocity *= Math.exp(-delta * 2.8);
+    this.crashMotion.pitchVelocity *= Math.exp(-delta * 3.1);
+    this.crashMotion.yawVelocity *= Math.exp(-delta * 2.3);
+    this.crashMotion.liftVelocity -= delta * 3.2;
+    this.crashMotion.lift = Math.max(0, this.crashMotion.lift);
+
+    if (this.crashMotion.time > 2.4) {
+      this.crashMotion.active = false;
+    }
+  }
+
+  applyCrashPose() {
+    if (!this.crashMotion.active) {
+      return;
+    }
+
+    this.player.mesh.position.y += this.crashMotion.lift;
+    this.player.mesh.rotateZ(this.crashMotion.roll);
+    this.player.mesh.rotateX(this.crashMotion.pitch);
+    this.player.mesh.rotateY(this.crashMotion.yaw);
+  }
+
   updateCrashOverlay(delta) {
     if (this.state !== "crashed" || this.crashOverlayDelay <= 0) {
       return;
@@ -1892,13 +2026,29 @@ export class Game {
       return;
     }
 
+    const impactSpin = THREE.MathUtils.clamp(this.player.lateralVelocity * 0.08, -2.2, 2.2);
+    this.crashMotion = {
+      active: true,
+      time: 0,
+      forwardSpeed: Math.max(9, this.player.speed * 0.34),
+      lateralSpeed: this.player.lateralVelocity * 0.28,
+      roll: 0,
+      pitch: 0,
+      yaw: 0,
+      rollVelocity: impactSpin * 0.65 + (this.player.lateralVelocity >= 0 ? -1.7 : 1.7),
+      pitchVelocity: -1.2,
+      yawVelocity: impactSpin,
+      lift: 0.24,
+      liftVelocity: 1.7,
+    };
     this.state = "crashed";
     this.player.speed = 0;
     this.menuCanResume = false;
     this.crashDistance = this.player.s;
     this.crashOverlayDelay = 0.42;
     this.input.resetState();
-    this.setViewMode("chase", { snap: true, resetLookBehind: true });
+    this.lookBehindActive = false;
+    this.snapCameraToCurrentView();
     this.hud.hideCrash();
     this.triggerCrashEffect();
     this.hud.setScoreStatus("Saving to local high scores...");
@@ -2054,13 +2204,10 @@ export class Game {
     this.trafficSystem.setQualityPreset(nextPreset);
     this.camera.far = this.graphics.cameraFar;
     this.camera.updateProjectionMatrix();
-    this.rearCamera.far = this.graphics.cameraFar;
-    this.rearCamera.updateProjectionMatrix();
     this.scenerySystem.setQuality({ flockCount: this.graphics.sceneryFlocks });
     this.weatherSystem.setQuality({ particleBudget: this.graphics.particleBudget });
     this.hud.setGraphicsPreset(nextPreset);
     this.hud.setGraphicsPresetStatus(this.getGraphicsPresetStatus());
-    this.updateRearMirrorState();
     this.handleResize();
 
     if (persist) {
@@ -2086,14 +2233,14 @@ export class Game {
 
   getGraphicsPresetStatus() {
     if (this.graphicsPreset === "high") {
-      return "High restores dense city scenery, the farthest draw distance, heavier traffic, dynamic vehicle lights, and the live rear-view mirror.";
+      return "High restores dense city scenery, the farthest draw distance, heavier traffic, and dynamic vehicle lights.";
     }
 
     if (this.graphicsPreset === "medium") {
       return "Balanced is the default. It keeps draw distance and traffic lighter, strips dense city blocks, and preserves better clarity than Low.";
     }
 
-    return "Low is the leanest preset. It cuts draw distance further, lowers render resolution, minimizes traffic pressure, and disables dynamic vehicle lights and the live rear-view mirror.";
+    return "Low is the leanest preset. It cuts draw distance further, lowers render resolution, minimizes traffic pressure, and disables dynamic vehicle lights.";
   }
 
   pickNearestLaneTarget(candidateOffset, laneTargets, bounds) {
@@ -2217,7 +2364,7 @@ export class Game {
         return "Race finished";
       }
 
-      return `Position ${this.multiplayer.position}/${this.multiplayer.playerCount}`;
+      return `P${this.multiplayer.position}/${this.multiplayer.playerCount} · ${this.getMultiplayerPowerupLabel()}`;
     }
 
     if (this.multiplayer.mode === "multiplayer" && this.multiplayer.lobby) {
@@ -2225,6 +2372,133 @@ export class Game {
     }
 
     return "Single player";
+  }
+
+  getMultiplayerPowerupLabel() {
+    const clearReady = this.multiplayer.powerups.clear.cooldown <= 0;
+    const turboReady = this.multiplayer.powerups.turbo.cooldown <= 0;
+    if (clearReady && turboReady) {
+      return "Clear + Turbo ready";
+    }
+    if (clearReady) {
+      return "Clear ready";
+    }
+    if (turboReady) {
+      return "Turbo ready";
+    }
+
+    const nextReady = Math.min(this.multiplayer.powerups.clear.cooldown, this.multiplayer.powerups.turbo.cooldown);
+    return `Power in ${Math.max(1, Math.ceil(nextReady))}s`;
+  }
+
+  resetMultiplayerPowerups() {
+    this.multiplayer.powerups.clear.cooldown = 0;
+    this.multiplayer.powerups.clear.activeTime = 0;
+    this.multiplayer.powerups.turbo.cooldown = 0;
+    this.multiplayer.powerups.turbo.activeTime = 0;
+  }
+
+  updateMultiplayerPowerups(delta) {
+    this.multiplayer.powerups.clear.cooldown = Math.max(0, this.multiplayer.powerups.clear.cooldown - delta);
+    this.multiplayer.powerups.clear.activeTime = Math.max(0, this.multiplayer.powerups.clear.activeTime - delta);
+    this.multiplayer.powerups.turbo.cooldown = Math.max(0, this.multiplayer.powerups.turbo.cooldown - delta);
+    this.multiplayer.powerups.turbo.activeTime = Math.max(0, this.multiplayer.powerups.turbo.activeTime - delta);
+  }
+
+  handleMultiplayerPowerupInput() {
+    if (this.isMultiplayerRaceCountdownActive()) {
+      return;
+    }
+
+    if (this.input.consumePowerAction("left")) {
+      this.useMultiplayerPowerup("clear");
+      return;
+    }
+
+    if (this.input.consumePowerAction("right")) {
+      this.useMultiplayerPowerup("turbo");
+      return;
+    }
+
+    if (this.input.consumePowerAction("generic")) {
+      const aheadTraffic = this.trafficSystem.getClosestVehicleAhead(
+        this.player.route.branchId || "main",
+        this.player.s,
+        this.player.laneOffset
+      );
+      if (aheadTraffic && aheadTraffic.gap < 28 && this.multiplayer.powerups.clear.cooldown <= 0) {
+        this.useMultiplayerPowerup("clear");
+        return;
+      }
+
+      if (this.multiplayer.powerups.turbo.cooldown <= 0) {
+        this.useMultiplayerPowerup("turbo");
+        return;
+      }
+
+      this.useMultiplayerPowerup("clear");
+    }
+  }
+
+  useMultiplayerPowerup(kind) {
+    if (this.state !== "running" || !this.isMultiplayerRaceActive()) {
+      return false;
+    }
+
+    if (kind === "clear") {
+      if (this.multiplayer.powerups.clear.cooldown > 0) {
+        return false;
+      }
+
+      this.multiplayer.powerups.clear.cooldown = 12;
+      this.multiplayer.powerups.clear.activeTime = 4.5;
+      this.hud.setMultiplayerStatus("Lane clear deployed.");
+      this.feedbackSystem.playPassBy(28);
+      return true;
+    }
+
+    if (kind === "turbo") {
+      if (this.multiplayer.powerups.turbo.cooldown > 0) {
+        return false;
+      }
+
+      this.multiplayer.powerups.turbo.cooldown = 14;
+      this.multiplayer.powerups.turbo.activeTime = 1.9;
+      this.player.nosCharge = Math.min(72, this.player.nosCharge + 28);
+      this.hud.setMultiplayerStatus("Turbo surge deployed.");
+      this.feedbackSystem.playNosBurst();
+      return true;
+    }
+
+    return false;
+  }
+
+  getPriorityRaceVehicles() {
+    const vehicles = [
+      {
+        s: this.player.s,
+        laneOffset: this.player.laneOffset,
+        speed: this.player.speed,
+        routeId: this.player.route.branchId || "main",
+      },
+    ];
+
+    if (this.multiplayer.lastRaceState?.players?.length) {
+      for (const playerState of this.multiplayer.lastRaceState.players) {
+        if (playerState.id === this.multiplayerClient.clientId) {
+          continue;
+        }
+
+        vehicles.push({
+          s: Number(playerState.s) || 0,
+          laneOffset: Number(playerState.laneOffset) || 0,
+          speed: Number(playerState.speed) || 0,
+          routeId: "main",
+        });
+      }
+    }
+
+    return vehicles;
   }
 
   isMultiplayerRaceActive() {
@@ -2250,6 +2524,7 @@ export class Game {
     this.multiplayer.sendAccumulator = 0;
     this.multiplayer.position = 1;
     this.multiplayer.playerCount = 1;
+    this.resetMultiplayerPowerups();
     this.updateMultiplayerRaceMarkers();
   }
 
@@ -2264,10 +2539,86 @@ export class Game {
     return this.multiplayer.race.startGrid.find((slot) => slot.id === playerId) || null;
   }
 
+  createRemotePlayerLabel(name = "Guest", place = 1) {
+    if (typeof document === "undefined") {
+      return null;
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 320;
+    canvas.height = 96;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return null;
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const material = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthWrite: false,
+    });
+    const sprite = new THREE.Sprite(material);
+    sprite.position.set(0, 4.2, 0);
+    sprite.scale.set(6.4, 1.92, 1);
+
+    const label = {
+      canvas,
+      context,
+      texture,
+      sprite,
+      textKey: "",
+    };
+    this.updateRemotePlayerLabel(label, name, place);
+    return label;
+  }
+
+  updateRemotePlayerLabel(label, name = "Guest", place = 1) {
+    if (!label?.context) {
+      return;
+    }
+
+    const safeName = String(name || "Guest").slice(0, 18);
+    const safePlace = Math.max(1, Number(place) || 1);
+    const textKey = `${safePlace}:${safeName}`;
+    if (label.textKey === textKey) {
+      return;
+    }
+
+    label.textKey = textKey;
+    const { context, canvas, texture } = label;
+    context.clearRect(0, 0, canvas.width, canvas.height);
+
+    context.fillStyle = "rgba(8, 12, 18, 0.78)";
+    context.beginPath();
+    context.roundRect(8, 10, canvas.width - 16, canvas.height - 20, 24);
+    context.fill();
+    context.strokeStyle = "rgba(255, 240, 214, 0.42)";
+    context.lineWidth = 4;
+    context.stroke();
+
+    context.fillStyle = "#ffd166";
+    context.font = "bold 28px sans-serif";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(`P${safePlace}`, canvas.width * 0.5, 30);
+
+    context.fillStyle = "#f8f4ea";
+    context.font = "bold 34px sans-serif";
+    context.fillText(safeName, canvas.width * 0.5, 62);
+    texture.needsUpdate = true;
+  }
+
   updateRemotePlayers(delta) {
     for (const remote of this.multiplayer.remotePlayers.values()) {
-      remote.displayS = THREE.MathUtils.damp(remote.displayS, remote.state.s, 8, delta);
-      remote.displayLaneOffset = THREE.MathUtils.damp(remote.displayLaneOffset, remote.state.laneOffset, 10, delta);
+      const predictionSeconds = Math.min((performance.now() - (remote.lastStateAt || performance.now())) / 1000, 0.22);
+      const predictedS = remote.state.finished ? remote.state.s : remote.state.s + remote.state.speed * predictionSeconds;
+      const predictedLaneOffset = remote.state.finished
+        ? remote.state.laneOffset
+        : remote.state.laneOffset + remote.laneVelocity * predictionSeconds;
+      remote.displayS = THREE.MathUtils.damp(remote.displayS, predictedS, 10.5, delta);
+      remote.displayLaneOffset = THREE.MathUtils.damp(remote.displayLaneOffset, predictedLaneOffset, 12, delta);
       remote.mesh.userData.setBoostActive?.(
         !remote.state.finished && remote.state.speed > this.player.baseCruiseSpeed + 10,
         0.3
@@ -2421,6 +2772,7 @@ export class Game {
       this.player.s = Number(startSlot.s) || 0;
       this.player.laneOffset = Number(startSlot.laneOffset) || 0;
       this.player.targetLaneOffset = this.player.laneOffset;
+      this.player.speed = MULTIPLAYER_ROLLING_SPEED;
       this.playerSample = this.track.placeAlongTrack(
         this.player.mesh,
         this.player.s,
@@ -2430,7 +2782,8 @@ export class Game {
         this.player.route
       );
     }
-    this.setViewMode("chase", { snap: true, resetLookBehind: true });
+    this.lookBehindActive = false;
+    this.snapCameraToCurrentView();
     this.hasRunStarted = true;
     this.controlsHintTime = CONTROLS_HINT_DURATION;
     this.hud.setControlsVisible(true);
@@ -2460,17 +2813,32 @@ export class Game {
       let remote = this.multiplayer.remotePlayers.get(playerState.id);
       if (!remote) {
         const mesh = createRivalCar(playerState.id);
+        const label = this.createRemotePlayerLabel(playerState.name, playerState.place);
+        label?.sprite && mesh.add(label.sprite);
         this.scene.add(mesh);
         remote = {
           mesh,
           state: playerState,
           displayS: playerState.s,
           displayLaneOffset: playerState.laneOffset,
+          lastStateAt: performance.now(),
+          laneVelocity: 0,
+          label,
         };
         this.multiplayer.remotePlayers.set(playerState.id, remote);
       }
 
+      const now = performance.now();
+      const previousState = remote.state;
+      const deltaSeconds = Math.max((now - (remote.lastStateAt || now)) / 1000, 0.001);
+      remote.laneVelocity = THREE.MathUtils.clamp(
+        ((playerState.laneOffset ?? 0) - (previousState?.laneOffset ?? playerState.laneOffset ?? 0)) / deltaSeconds,
+        -10,
+        10
+      );
+      remote.lastStateAt = now;
       remote.state = playerState;
+      this.updateRemotePlayerLabel(remote.label, playerState.name, playerState.place);
     }
 
     for (const [remoteId, remote] of this.multiplayer.remotePlayers.entries()) {

@@ -6,6 +6,7 @@ const LANE_OFFSETS = [-LANE_WIDTH, 0, LANE_WIDTH];
 const POLICE_ESCAPE_DISTANCE = 260;
 const POLICE_SPAWN_INTERVAL = 920;
 const RACER_SPAWN_INTERVAL = 520;
+const TURN_SIGNAL_LEAD_TIME = 0.55;
 const TRAFFIC_QUALITY_PRESETS = {
   low: {
     minTrafficTarget: 3,
@@ -96,7 +97,12 @@ export class TrafficSystem {
     this.behaviorUpdateTimer = 0;
   }
 
-  update(delta, player, weather, { allowPolice = true, allowRacers = true } = {}) {
+  update(
+    delta,
+    player,
+    weather,
+    { allowPolice = true, allowRacers = true, priorityVehicles = [], roadClearActive = false } = {}
+  ) {
     this.time += delta;
     const activeRouteId = player.route.branchId || "main";
     const policeCount = this.countVehiclesOnRoute(activeRouteId, "police");
@@ -156,14 +162,14 @@ export class TrafficSystem {
       const routes = this.groupVehiclesByRoute();
       for (const vehicles of routes.values()) {
         vehicles.sort((vehicleA, vehicleB) => vehicleA.s - vehicleB.s);
-        this.planLaneChanges(vehicles, player);
+        this.planLaneChanges(vehicles, player, { priorityVehicles, roadClearActive });
       }
       this.behaviorUpdateTimer = trafficProfile.behaviorInterval;
     }
 
-    for (let index = this.vehicles.length - 1; index >= 0; index -= 1) {
-      const vehicle = this.vehicles[index];
+    for (const vehicle of this.vehicles) {
       vehicle.laneChangeCooldown = Math.max(0, vehicle.laneChangeCooldown - delta);
+      this.updateVehicleTurnSignals(vehicle, delta);
 
       if (vehicle.kind === "police") {
         this.updatePoliceVehicle(vehicle, player, weather);
@@ -195,7 +201,12 @@ export class TrafficSystem {
       }
       vehicle.mesh.userData.setNightLights?.((weather.nightLevel || 0) > 0.08, weather.nightLevel || 0);
       vehicle.mesh.userData.setBrakeLights?.(vehicle.kind === "police" && vehicle.mode === "parked" ? 1 : brakeLightAmount);
+    }
 
+    this.resolveVehicleSpacing();
+
+    for (let index = this.vehicles.length - 1; index >= 0; index -= 1) {
+      const vehicle = this.vehicles[index];
       if (this.shouldDespawnVehicle(vehicle, player)) {
         this.scene.remove(vehicle.mesh);
         this.vehicles.splice(index, 1);
@@ -266,6 +277,7 @@ export class TrafficSystem {
 
     vehicle.lightsActive = true;
     vehicle.laneTargetOffset = null;
+    const trafficAhead = this.getLaneMetrics(vehicle.routeId, vehicle.targetLaneIndex, vehicle.s, vehicle);
 
     if (forwardGap > 0 && vehicle.laneChangeCooldown <= 0) {
       const targetLaneIndex = playerLaneIndex;
@@ -275,6 +287,19 @@ export class TrafficSystem {
       ) {
         vehicle.targetLaneIndex = targetLaneIndex;
         vehicle.laneChangeCooldown = 0.5;
+      }
+    }
+
+    if (
+      trafficAhead.aheadVehicle &&
+      trafficAhead.aheadVehicle.kind !== "police" &&
+      trafficAhead.aheadGap < 18 &&
+      vehicle.laneChangeCooldown <= 0
+    ) {
+      const chaseLane = this.pickLaneForPriorityVehicle(vehicle, playerLaneIndex, trafficAhead.aheadGap);
+      if (chaseLane !== vehicle.targetLaneIndex) {
+        vehicle.targetLaneIndex = chaseLane;
+        vehicle.laneChangeCooldown = 0.45;
       }
     }
 
@@ -309,6 +334,9 @@ export class TrafficSystem {
     }
 
     vehicle.desiredSpeed = chaseSpeed;
+    if (trafficAhead.aheadVehicle && trafficAhead.aheadGap < 12) {
+      vehicle.desiredSpeed = Math.min(vehicle.desiredSpeed, Math.max(8, trafficAhead.aheadVehicle.speed - 2));
+    }
   }
 
   updateEmergencyLights(vehicle, delta) {
@@ -511,6 +539,9 @@ export class TrafficSystem {
       height,
       routeId,
       laneChangeCooldown: 0,
+      turnSignalDirection: 0,
+      signalTime: Math.random(),
+      pendingLaneChange: null,
     };
 
     this.vehicles.push(vehicle);
@@ -557,6 +588,9 @@ export class TrafficSystem {
       height: 0.76,
       routeId,
       laneChangeCooldown: 0.3,
+      turnSignalDirection: 0,
+      signalTime: Math.random(),
+      pendingLaneChange: null,
     };
 
     this.vehicles.push(vehicle);
@@ -598,6 +632,9 @@ export class TrafficSystem {
       lightsActive: false,
       shoulderSide,
       shoulderOffset,
+      turnSignalDirection: 0,
+      signalTime: Math.random(),
+      pendingLaneChange: null,
     };
 
     this.vehicles.push(vehicle);
@@ -627,7 +664,7 @@ export class TrafficSystem {
     return nearbyCount < 1;
   }
 
-  planLaneChanges(vehicles, player) {
+  planLaneChanges(vehicles, player, { priorityVehicles = [], roadClearActive = false } = {}) {
     for (const vehicle of vehicles) {
       if (vehicle.kind === "police") {
         continue;
@@ -635,6 +672,12 @@ export class TrafficSystem {
 
       const currentMetrics = this.getLaneMetrics(vehicle.routeId, vehicle.laneIndex, vehicle.s, vehicle);
       const policeBehind = this.findPoliceBehind(vehicle.routeId, vehicle.s, vehicle.laneIndex);
+      const priorityBehind = this.findPriorityVehicleBehind(
+        vehicle.routeId,
+        vehicle.s,
+        vehicle.laneIndex,
+        priorityVehicles
+      );
       const isBus = vehicle.kind === "bus";
       const isTaxi = vehicle.kind === "taxi";
       const isRacer = vehicle.kind === "racer";
@@ -642,11 +685,38 @@ export class TrafficSystem {
       const nearPlayerLane = Math.abs(vehicle.laneOffset - player.laneOffset) < LANE_WIDTH * 0.68;
       const canLaneChangeNow = this.canTriggerTrafficLaneChange(vehicle.routeId);
       let desiredSpeed = vehicle.cruiseSpeed;
+      const shouldClearForPlayer =
+        roadClearActive &&
+        !isRacer &&
+        playerGap > 6 &&
+        playerGap < 60 &&
+        nearPlayerLane;
 
       if (policeBehind && policeBehind.gap < 34 && vehicle.laneChangeCooldown <= 0 && canLaneChangeNow) {
         const yieldLane = this.pickYieldLane(vehicle, policeBehind.laneIndex);
         if (yieldLane !== vehicle.laneIndex) {
           this.commitTrafficLaneChange(vehicle, yieldLane, isBus ? 1.5 : 1);
+        }
+      } else if (
+        shouldClearForPlayer &&
+        vehicle.laneChangeCooldown <= 0 &&
+        canLaneChangeNow
+      ) {
+        const clearLane = this.pickYieldLane(vehicle, this.getNearestLaneIndex(player.laneOffset));
+        if (clearLane !== vehicle.laneIndex) {
+          this.commitTrafficLaneChange(vehicle, clearLane, isBus ? 1.4 : 0.95);
+        }
+        desiredSpeed = Math.min(desiredSpeed, Math.max(9, player.speed - 6));
+      } else if (
+        priorityBehind &&
+        priorityBehind.gap < 48 &&
+        priorityBehind.relativeSpeed > 2 &&
+        vehicle.laneChangeCooldown <= 0 &&
+        canLaneChangeNow
+      ) {
+        const yieldLane = this.pickYieldLane(vehicle, priorityBehind.laneIndex);
+        if (yieldLane !== vehicle.laneIndex) {
+          this.commitTrafficLaneChange(vehicle, yieldLane, isBus ? 1.35 : 0.95);
         }
       } else if (currentMetrics.aheadVehicle) {
         const gap = currentMetrics.aheadGap;
@@ -710,17 +780,30 @@ export class TrafficSystem {
   }
 
   pickYieldLane(vehicle, blockedLaneIndex) {
-    for (const candidate of [vehicle.laneIndex - 1, vehicle.laneIndex + 1]) {
-      if (candidate < 0 || candidate >= LANE_OFFSETS.length || candidate === blockedLaneIndex) {
+    let bestLane = vehicle.laneIndex;
+    let bestScore = Number.NEGATIVE_INFINITY;
+
+    for (let candidate = 0; candidate < LANE_OFFSETS.length; candidate += 1) {
+      if (candidate === blockedLaneIndex) {
         continue;
       }
 
-      if (this.isLaneAvailable(vehicle.routeId, candidate, vehicle.s, 22, 12, vehicle)) {
-        return candidate;
+      const metrics = this.getLaneMetrics(vehicle.routeId, candidate, vehicle.s, vehicle);
+      if (metrics.aheadGap <= 22 || metrics.behindGap <= 12) {
+        continue;
+      }
+
+      const awayBonus = Math.abs(candidate - blockedLaneIndex) * 16;
+      const centerBonus = candidate === 1 ? 4 : 0;
+      const changePenalty = Math.abs(candidate - vehicle.laneIndex) * 3;
+      const score = Math.min(metrics.aheadGap, 82) + Math.min(metrics.behindGap, 40) + awayBonus + centerBonus - changePenalty;
+      if (score > bestScore) {
+        bestScore = score;
+        bestLane = candidate;
       }
     }
 
-    return vehicle.laneIndex;
+    return bestLane;
   }
 
   canTriggerTrafficLaneChange(routeId) {
@@ -728,10 +811,18 @@ export class TrafficSystem {
   }
 
   commitTrafficLaneChange(vehicle, nextLaneIndex, cooldown = 1) {
-    vehicle.targetLaneIndex = nextLaneIndex;
-    vehicle.laneIndex = nextLaneIndex;
-    vehicle.laneChangeCooldown = cooldown;
-    this.nextTrafficLaneChangeAt.set(vehicle.routeId, this.time + 1);
+    if (nextLaneIndex === vehicle.targetLaneIndex || nextLaneIndex === vehicle.laneIndex) {
+      return;
+    }
+
+    vehicle.pendingLaneChange = {
+      laneIndex: nextLaneIndex,
+      cooldown,
+      remaining: TURN_SIGNAL_LEAD_TIME,
+    };
+    vehicle.turnSignalDirection = Math.sign(nextLaneIndex - vehicle.laneIndex);
+    vehicle.signalTime = 0;
+    this.nextTrafficLaneChangeAt.set(vehicle.routeId, this.time + 0.9);
   }
 
   pickLaneAwayFrom(vehicle, blockedLaneIndex, aheadDistance = 22, behindDistance = 12) {
@@ -789,6 +880,134 @@ export class TrafficSystem {
     }
 
     return bestLane;
+  }
+
+  pickLaneForPriorityVehicle(vehicle, priorityLaneIndex, currentGap = 0) {
+    let bestLane = vehicle.targetLaneIndex;
+    let bestScore = Number.NEGATIVE_INFINITY;
+
+    for (let candidate = 0; candidate < LANE_OFFSETS.length; candidate += 1) {
+      const metrics = this.getLaneMetrics(vehicle.routeId, candidate, vehicle.s, vehicle);
+      if (metrics.aheadGap <= 14 || metrics.behindGap <= 8) {
+        continue;
+      }
+
+      const playerBias = candidate === priorityLaneIndex ? 22 : 0;
+      const gapScore = Math.min(metrics.aheadGap, 70);
+      const changePenalty = Math.abs(candidate - vehicle.laneIndex) * 5;
+      const congestionPenalty = currentGap < 16 && candidate !== priorityLaneIndex ? 10 : 0;
+      const score = gapScore + playerBias - changePenalty - congestionPenalty;
+      if (score > bestScore) {
+        bestScore = score;
+        bestLane = candidate;
+      }
+    }
+
+    return bestLane;
+  }
+
+  findPriorityVehicleBehind(routeId, s, laneIndex, priorityVehicles = []) {
+    const laneOffset = LANE_OFFSETS[laneIndex];
+    let closest = null;
+
+    for (const vehicle of priorityVehicles) {
+      if (!vehicle) {
+        continue;
+      }
+
+      const candidateRouteId = vehicle.routeId || "main";
+      if (candidateRouteId !== routeId) {
+        continue;
+      }
+
+      const candidateLaneOffset = Number(vehicle.laneOffset) || 0;
+      const gap = s - (Number(vehicle.s) || 0);
+      if (gap <= 0 || gap > 72 || Math.abs(candidateLaneOffset - laneOffset) > LANE_WIDTH * 1.05) {
+        continue;
+      }
+
+      const relativeSpeed = (Number(vehicle.speed) || 0) - 12;
+      if (!closest || gap < closest.gap) {
+        closest = {
+          gap,
+          laneIndex: this.getNearestLaneIndex(candidateLaneOffset),
+          relativeSpeed,
+        };
+      }
+    }
+
+    return closest;
+  }
+
+  updateVehicleTurnSignals(vehicle, delta) {
+    vehicle.signalTime = (vehicle.signalTime || 0) + delta;
+
+    if (vehicle.pendingLaneChange) {
+      vehicle.pendingLaneChange.remaining = Math.max(0, vehicle.pendingLaneChange.remaining - delta);
+      vehicle.turnSignalDirection = Math.sign(vehicle.pendingLaneChange.laneIndex - vehicle.laneIndex);
+      if (vehicle.pendingLaneChange.remaining === 0) {
+        if (
+          this.isLaneAvailable(
+            vehicle.routeId,
+            vehicle.pendingLaneChange.laneIndex,
+            vehicle.s,
+            vehicle.kind === "bus" ? 34 : 24,
+            vehicle.kind === "bus" ? 16 : 12,
+            vehicle
+          )
+        ) {
+          vehicle.targetLaneIndex = vehicle.pendingLaneChange.laneIndex;
+          vehicle.laneTargetOffset = null;
+          vehicle.laneChangeCooldown = vehicle.pendingLaneChange.cooldown;
+        }
+        vehicle.pendingLaneChange = null;
+      }
+    } else if (Math.abs(vehicle.laneOffset - LANE_OFFSETS[vehicle.targetLaneIndex]) < 0.12) {
+      vehicle.turnSignalDirection = 0;
+    }
+
+    const turnSignals = vehicle.mesh.userData.turnSignals;
+    if (!turnSignals) {
+      return;
+    }
+
+    const blinkOn = vehicle.turnSignalDirection !== 0 && Math.floor(vehicle.signalTime * 3.8) % 2 === 0;
+    turnSignals.material.emissiveIntensity = vehicle.turnSignalDirection === 0 ? 0.18 : blinkOn ? 1.35 : 0.22;
+    turnSignals.material.opacity = vehicle.turnSignalDirection === 0 ? 0.48 : blinkOn ? 0.96 : 0.18;
+    for (const signal of turnSignals.left) {
+      signal.visible = vehicle.turnSignalDirection < 0;
+    }
+    for (const signal of turnSignals.right) {
+      signal.visible = vehicle.turnSignalDirection > 0;
+    }
+  }
+
+  resolveVehicleSpacing() {
+    const routes = this.groupVehiclesByRoute();
+    for (const vehicles of routes.values()) {
+      vehicles.sort((vehicleA, vehicleB) => vehicleB.s - vehicleA.s);
+      for (let index = 1; index < vehicles.length; index += 1) {
+        const ahead = vehicles[index - 1];
+        const behind = vehicles[index];
+        if (
+          Math.abs(ahead.laneOffset - behind.laneOffset) > LANE_WIDTH * 0.58 ||
+          ahead.kind === "racer" ||
+          behind.kind === "racer"
+        ) {
+          continue;
+        }
+
+        const minimumGap = (ahead.length + behind.length) * 0.5 + (behind.kind === "police" ? 2.6 : 4.2);
+        const gap = ahead.s - behind.s;
+        if (gap >= minimumGap) {
+          continue;
+        }
+
+        behind.s = ahead.s - minimumGap;
+        behind.speed = Math.min(behind.speed, Math.max(0, ahead.speed - 0.8));
+        behind.desiredSpeed = Math.min(behind.desiredSpeed, Math.max(0, ahead.speed - 0.6));
+      }
+    }
   }
 
   findPoliceBehind(routeId, s, laneIndex) {

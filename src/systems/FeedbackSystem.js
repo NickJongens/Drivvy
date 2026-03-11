@@ -12,6 +12,10 @@ export class FeedbackSystem {
     this.engineLowGain = null;
     this.engineHighGain = null;
     this.engineFilter = null;
+    this.sirenOscillator = null;
+    this.sirenGain = null;
+    this.sirenFilter = null;
+    this.sirenPhase = 0;
     this.boostWasActive = false;
     this.passByCooldown = 0;
     this.policePulseTimer = 0;
@@ -54,6 +58,7 @@ export class FeedbackSystem {
     this.boostWasActive = false;
     this.passByCooldown = 0;
     this.policePulseTimer = 0;
+    this.sirenPhase = 0;
   }
 
   async unlockAudio() {
@@ -65,6 +70,7 @@ export class FeedbackSystem {
     if (!this.audioContext) {
       this.audioContext = new AudioContextCtor();
       this.createEngineNodes();
+      this.createSirenNodes();
     }
 
     if (this.audioContext.state === "suspended") {
@@ -113,10 +119,34 @@ export class FeedbackSystem {
     this.engineHighOscillator.start();
   }
 
+  createSirenNodes() {
+    if (!this.audioContext) {
+      return;
+    }
+
+    this.sirenGain = this.audioContext.createGain();
+    this.sirenGain.gain.value = 0;
+
+    this.sirenFilter = this.audioContext.createBiquadFilter();
+    this.sirenFilter.type = "bandpass";
+    this.sirenFilter.frequency.value = 760;
+    this.sirenFilter.Q.value = 1.6;
+
+    this.sirenOscillator = this.audioContext.createOscillator();
+    this.sirenOscillator.type = "triangle";
+    this.sirenOscillator.frequency.value = 580;
+
+    this.sirenOscillator.connect(this.sirenFilter);
+    this.sirenFilter.connect(this.sirenGain);
+    this.sirenGain.connect(this.audioContext.destination);
+    this.sirenOscillator.start();
+  }
+
   update({ delta, running, speed, boostActive, policeGap }) {
     this.passByCooldown = Math.max(0, this.passByCooldown - delta);
     this.updateEngine(running, speed, boostActive);
     this.updatePolicePulse(delta, running ? policeGap : null);
+    this.updatePoliceSiren(delta, running ? policeGap : null);
 
     if (boostActive && !this.boostWasActive) {
       this.playNosBurst();
@@ -224,6 +254,27 @@ export class FeedbackSystem {
     const gapToNextPulse = 0.9 - intensity * 0.68;
     this.vibrate(duration);
     this.policePulseTimer = gapToNextPulse;
+  }
+
+  updatePoliceSiren(delta, policeGap) {
+    if (!this.audioContext || !this.sirenOscillator || !this.sirenGain || !this.sirenFilter) {
+      return;
+    }
+
+    const now = this.audioContext.currentTime;
+    const active = Number.isFinite(policeGap) && policeGap !== null && policeGap < 130;
+    if (!active) {
+      this.sirenGain.gain.setTargetAtTime(0, now, 0.12);
+      return;
+    }
+
+    this.sirenPhase += delta * 1.8;
+    const intensity = 1 - clamp((policeGap - 12) / 118, 0, 1);
+    const wave = (Math.sin(this.sirenPhase * Math.PI * 2) + 1) * 0.5;
+    const frequency = 430 + wave * 210 + intensity * 40;
+    this.sirenOscillator.frequency.setTargetAtTime(frequency, now, 0.04);
+    this.sirenFilter.frequency.setTargetAtTime(620 + wave * 380 + intensity * 120, now, 0.05);
+    this.sirenGain.gain.setTargetAtTime(0.014 + intensity * 0.028, now, 0.06);
   }
 
   vibrate(pattern) {

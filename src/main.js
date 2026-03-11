@@ -2,8 +2,6 @@ import { Game } from "./game.js";
 
 const game = new Game({
   mount: document.getElementById("viewport"),
-  rearMirrorFrame: document.getElementById("rearview-mirror"),
-  cockpitFrame: document.getElementById("cockpit-frame"),
   hudElements: {
     speed: document.getElementById("speed-value"),
     distance: document.getElementById("distance-value"),
@@ -64,6 +62,7 @@ const game = new Game({
     menuTrigger: document.getElementById("menu-trigger"),
     fullscreenToggle: document.getElementById("fullscreen-toggle"),
     controlsPanel: document.getElementById("controls-panel"),
+    controlsMessage: document.getElementById("controls-message"),
     graphicsPresetSelect: document.getElementById("graphics-preset-select"),
     graphicsPresetStatus: document.getElementById("graphics-preset-status"),
     vibrationToggleButton: document.getElementById("vibration-toggle-button"),

@@ -62,6 +62,7 @@ export class Hud {
     menuTrigger,
     fullscreenToggle,
     controlsPanel,
+    controlsMessage,
     graphicsPresetSelect,
     graphicsPresetStatus,
     vibrationToggleButton,
@@ -132,6 +133,7 @@ export class Hud {
     this.menuTrigger = menuTrigger;
     this.fullscreenToggle = fullscreenToggle;
     this.controlsPanel = controlsPanel;
+    this.controlsMessage = controlsMessage;
     this.graphicsPresetSelect = graphicsPresetSelect;
     this.graphicsPresetStatus = graphicsPresetStatus;
     this.vibrationToggleButton = vibrationToggleButton;
@@ -266,6 +268,7 @@ export class Hud {
     this.menuPlayButton.textContent = canResume ? "Resume" : "Drive";
     this.menuNewRunButton.classList.toggle("is-hidden", !canResume);
     this.menuOverlay.classList.remove("is-hidden");
+    document.body.classList.add("menu-open");
     this.setAiEnabled(aiEnabled);
     this.setMenuMode(mode);
     this.renderSecretPanel();
@@ -273,6 +276,7 @@ export class Hud {
 
   hideMenu() {
     this.menuOverlay.classList.add("is-hidden");
+    document.body.classList.remove("menu-open");
   }
 
   isMenuVisible() {
@@ -285,6 +289,12 @@ export class Hud {
 
   setControlsVisible(visible) {
     this.controlsPanel?.classList.toggle("is-hidden-by-timer", !visible);
+  }
+
+  setControlsText(message) {
+    if (this.controlsMessage) {
+      this.controlsMessage.textContent = message;
+    }
   }
 
   showTrackingConsent() {
@@ -408,19 +418,21 @@ export class Hud {
   }
 
   getPlayerName() {
-    return this.playerNameInput.value.trim();
+    return this.playerNameInput?.value.trim() || "";
   }
 
   setPlayerName(name) {
-    this.playerNameInput.value = name || "";
+    if (this.playerNameInput) {
+      this.playerNameInput.value = name || "";
+    }
     if (this.onboardingNameInput) {
       this.onboardingNameInput.value = name || "";
     }
   }
 
   focusNameInput() {
-    this.playerNameInput.focus();
-    this.playerNameInput.select();
+    this.playerNameInput?.focus();
+    this.playerNameInput?.select();
   }
 
   getOnboardingName() {

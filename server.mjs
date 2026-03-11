@@ -15,6 +15,7 @@ const STATS_PATH = path.join(DATA_DIR, "stats.json");
 const MAX_SCORES = 250;
 const MULTIPLAYER_TARGET_DISTANCE = 6000;
 const MULTIPLAYER_COUNTDOWN_MS = 5000;
+const MULTIPLAYER_ROLLING_SPEED = 32;
 const GRID_LANE_OFFSETS = [0, -4.8, 4.8];
 const GRID_ROW_SPACING = 18;
 const GRID_START_OFFSET = 26;
@@ -149,11 +150,12 @@ async function readStatsStore() {
     }
 
     const parsed = JSON.parse(raw);
+    const totalsSource = parsed?.totals && typeof parsed.totals === "object" ? parsed.totals : parsed;
     return {
       totals: {
-        trackedSessions: Math.max(0, Number(parsed?.totals?.trackedSessions) || 0),
-        playRuns: Math.max(0, Number(parsed?.totals?.playRuns) || 0),
-        scoreEvents: Math.max(0, Number(parsed?.totals?.scoreEvents) || 0),
+        trackedSessions: Math.max(0, Number(totalsSource?.trackedSessions) || 0),
+        playRuns: Math.max(0, Number(totalsSource?.playRuns) || 0),
+        scoreEvents: Math.max(0, Number(totalsSource?.scoreEvents) || 0),
       },
       updatedAt: parsed?.updatedAt || null,
     };
@@ -525,6 +527,11 @@ async function handleStatsSummary(request, response, url) {
   const stats = await readStatsStore();
   const limit = clampLimit(url.searchParams.get("limit"), 12, 100);
   const uniqueIps = new Set([...trackedVisitors.values()].map((visitor) => visitor.ipAddress).filter(Boolean)).size;
+  const liveTotals = {
+    trackedSessions: Math.max(stats.totals.trackedSessions, trackedVisitors.size),
+    playRuns: Math.max(stats.totals.playRuns, recentRuns.length),
+    scoreEvents: Math.max(stats.totals.scoreEvents, recentScores.length),
+  };
 
   sendApiJson(
     response,
@@ -534,9 +541,9 @@ async function handleStatsSummary(request, response, url) {
       requiresApiKey: Boolean(STATS_API_KEY),
       generatedAt: new Date().toISOString(),
       totals: {
-        trackedSessions: stats.totals.trackedSessions,
-        playRuns: stats.totals.playRuns,
-        scoreEvents: stats.totals.scoreEvents,
+        trackedSessions: liveTotals.trackedSessions,
+        playRuns: liveTotals.playRuns,
+        scoreEvents: liveTotals.scoreEvents,
         leaderboardEntries: scores.length,
         visitorsInMemory: trackedVisitors.size,
         uniqueIpsInMemory: uniqueIps,
@@ -1034,7 +1041,7 @@ function handleWsPayload(client, payload) {
         player.raceState = {
           s: slot?.s ?? 0,
           laneOffset: slot?.laneOffset ?? 0,
-          speed: 0,
+          speed: MULTIPLAYER_ROLLING_SPEED,
           finished: false,
           finishTime: null,
         };
